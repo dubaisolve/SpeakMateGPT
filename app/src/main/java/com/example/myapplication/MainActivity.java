@@ -5,6 +5,7 @@ import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.content.res.ColorStateList;
 import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Environment;
@@ -15,10 +16,14 @@ import android.widget.Button;
 import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
+
+import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+
+import com.google.android.material.button.MaterialButton;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
@@ -42,7 +47,7 @@ public class MainActivity extends AppCompatActivity {
     private static String fileName = null;
     private MediaRecorder recorder = null;
     private ProgressDialog progressDialog;
-    private Button recordButton, stopButton, transcribeButton , translateButton;
+    private MaterialButton recordButton, stopButton, transcribeButton , translateButton;
     private EditText transcriptionTextView;
     private Handler fileSizeCheckHandler = new Handler();
     private void checkFileSizeAndWarn() {
@@ -66,7 +71,11 @@ public class MainActivity extends AppCompatActivity {
                 .build();
         return retrofit.create(Gpt3Service.class);
     }
-
+    private void updateRecordButtonIconColor(@ColorRes int colorResId) {
+        int color = ContextCompat.getColor(this, colorResId);
+        ColorStateList colorStateList = ColorStateList.valueOf(color);
+        recordButton.setIconTint(colorStateList);
+    }
     private TranscriptionService transcriptionService;
         private TranscriptionService createTranscriptionService() {
         Retrofit retrofit = new Retrofit.Builder()
@@ -136,6 +145,8 @@ public class MainActivity extends AppCompatActivity {
     }
     private void startRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            recordButton = findViewById(R.id.recordButton);
+            updateRecordButtonIconColor(R.color.red);
             recorder = new MediaRecorder();
             recorder.setAudioSource(MediaRecorder.AudioSource.MIC);
             recorder.setOutputFormat(MediaRecorder.OutputFormat.MPEG_4);
@@ -161,6 +172,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void stopRecording() {
         if (recorder != null) {
+            updateRecordButtonIconColor(R.color.button_icon_color);
             recorder.stop();
             recorder.release();
             recorder = null;
