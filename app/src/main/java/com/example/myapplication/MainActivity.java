@@ -10,7 +10,9 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
 import android.view.View;
+import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
+import android.widget.EditText;
 import android.widget.TextView;
 import android.widget.Toast;
 import androidx.annotation.NonNull;
@@ -41,13 +43,20 @@ public class MainActivity extends AppCompatActivity {
     private MediaRecorder recorder = null;
     private ProgressDialog progressDialog;
     private Button recordButton, stopButton, transcribeButton , translateButton;
-    private TextView transcriptionTextView;
+    private EditText transcriptionTextView;
     private Handler fileSizeCheckHandler = new Handler();
     private void checkFileSizeAndWarn() {
         File audioFile = new File(fileName);
         if (audioFile.length() > WARNING_THRESHOLD_BYTES) {
             Toast.makeText(this, "Recording is reaching the maximum size limit. Please wrap up soon.", Toast.LENGTH_LONG).show();
         }
+    }
+    private void enableEditTextFocus() {
+        transcriptionTextView.setFocusable(true);
+        transcriptionTextView.setFocusableInTouchMode(true);
+        transcriptionTextView.requestFocus();
+        InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
+        imm.showSoftInput(transcriptionTextView, InputMethodManager.SHOW_IMPLICIT);
     }
     private Gpt3Service gpt3Service;
     private Gpt3Service createGpt3Service() {
@@ -75,6 +84,12 @@ public class MainActivity extends AppCompatActivity {
         transcribeButton = findViewById(R.id.transcribeButton);
         translateButton = findViewById(R.id.translateButton); // Added this line
         transcriptionTextView = findViewById(R.id.transcriptionTextView);
+        transcriptionTextView.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                enableEditTextFocus();
+            }
+        });
         fileName = getExternalFilesDir(Environment.DIRECTORY_MUSIC) + "/audio.mp3";
         transcriptionService = createTranscriptionService();
         gpt3Service = createGpt3Service();
