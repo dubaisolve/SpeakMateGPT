@@ -309,6 +309,8 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+    private JsonArray messagesArray = new JsonArray();
+
     private void sendTextToGpt3(String text) {
         progressDialog = new ProgressDialog(this);
         progressDialog.setMessage("Sending to GPT-3.5 Turbo...");
@@ -316,22 +318,17 @@ public class MainActivity extends AppCompatActivity {
         progressDialog.show();
 
         String token = "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";
-        JsonObject messages = new JsonObject();
-        messages.addProperty("role", "system");
-        messages.addProperty("content", "You are personal assistant: polite and sharp with responses");
 
+        // Add user message to the messagesArray
         JsonObject userMessage = new JsonObject();
         userMessage.addProperty("role", "user");
         userMessage.addProperty("content", text);
-
-        JsonArray messagesArray = new JsonArray();
-        messagesArray.add(messages);
         messagesArray.add(userMessage);
 
         JsonObject jsonObject = new JsonObject();
         jsonObject.addProperty("model", "gpt-3.5-turbo");
         jsonObject.add("messages", messagesArray);
-        jsonObject.addProperty("max_tokens", 50);
+        jsonObject.addProperty("max_tokens", 500);
         jsonObject.addProperty("n", 1);
         jsonObject.addProperty("temperature", 0.5);
 
