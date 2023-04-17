@@ -1,0 +1,72 @@
+<?xml version="1.0" encoding="utf-8"?>
+<androidx.constraintlayout.widget.ConstraintLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
+    android:layout_width="match_parent"
+    android:layout_height="match_parent"
+    tools:context=".SettingsActivity">
+
+    <!-- GPT API Key field -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/gpt_api_key_layout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginStart="16dp"
+        android:layout_marginTop="16dp"
+        android:layout_marginEnd="16dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toTopOf="parent">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/gpt_api_key_edit_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="GPT API Key" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- ElevenLabs API Key field -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/eleven_labs_api_key_layout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/gpt_api_key_layout">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/eleven_labs_api_key_edit_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="ElevenLabs API Key" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <!-- ElevenLabs Voice_id field -->
+    <com.google.android.material.textfield.TextInputLayout
+        android:id="@+id/eleven_labs_voice_id_layout"
+        android:layout_width="0dp"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="8dp"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/eleven_labs_api_key_layout">
+
+        <com.google.android.material.textfield.TextInputEditText
+            android:id="@+id/eleven_labs_voice_id_edit_text"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:hint="ElevenLabs Voice_id" />
+    </com.google.android.material.textfield.TextInputLayout>
+
+    <Button
+        android:id="@+id/save_button"
+        android:layout_width="wrap_content"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="16dp"
+        android:text="Save"
+        app:layout_constraintEnd_toEndOf="parent"
+        app:layout_constraintStart_toStartOf="parent"
+        app:layout_constraintTop_toBottomOf="@+id/eleven_labs_voice_id_layout" />
+
+</androidx.constraintlayout.widget.ConstraintLayout>

@@ -4,12 +4,17 @@ import android.app.ProgressDialog;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
+import android.content.Intent;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
+import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Environment;
 import android.util.Log;
+import android.view.Menu;
+import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
@@ -19,6 +24,7 @@ import android.widget.Toast;
 
 import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
+import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -40,7 +46,13 @@ import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
 import android.os.Handler;
+import java.io.BufferedInputStream;
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.InputStream;
+import okhttp3.ResponseBody;
 public class MainActivity extends AppCompatActivity {
+    private static final int SETTINGS_REQUEST_CODE = 1;
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     private static final long MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
     private static final long WARNING_THRESHOLD_BYTES = (long) (MAX_FILE_SIZE_BYTES * 0.9); // 90% of 25 MB
@@ -64,6 +76,7 @@ public class MainActivity extends AppCompatActivity {
         imm.showSoftInput(transcriptionTextView, InputMethodManager.SHOW_IMPLICIT);
     }
     private Gpt3Service gpt3Service;
+    private ElevenLabsService elevenLabsService;
     private Gpt3Service createGpt3Service() {
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("https://api.openai.com/v1/")
@@ -88,60 +101,75 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-        recordButton = findViewById(R.id.recordButton);
-        stopButton = findViewById(R.id.stopButton);
-        transcribeButton = findViewById(R.id.transcribeButton);
-        translateButton = findViewById(R.id.translateButton); // Added this line
-        transcriptionTextView = findViewById(R.id.transcriptionTextView);
-        transcriptionTextView.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                enableEditTextFocus();
-            }
-        });
+
+        Retrofit retrofitElevenLabs = new Retrofit.Builder()
+                .baseUrl("https://api.elevenlabs.io/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .build();
+        elevenLabsService = retrofitElevenLabs.create(ElevenLabsService.class);
+        initViews();
+        initListeners();
         fileName = getExternalFilesDir(Environment.DIRECTORY_MUSIC) + "/audio.mp3";
         transcriptionService = createTranscriptionService();
         gpt3Service = createGpt3Service();
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_RECORD_AUDIO_PERMISSION);
-        recordButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                startRecording();
-            }
-        });
-        stopButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                stopRecording();
-            }
-        });
-        transcribeButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                transcribeAudio();
-            }
-        });
-        translateButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                translateAudio();
-            }
-        });
+    }
+
+    private void initViews() {
+        recordButton = findViewById(R.id.recordButton);
+        stopButton = findViewById(R.id.stopButton);
+        transcribeButton = findViewById(R.id.transcribeButton);
+        translateButton = findViewById(R.id.translateButton);
+        transcriptionTextView = findViewById(R.id.transcriptionTextView);
+    }
+
+    private void initListeners() {
+        transcriptionTextView.setOnClickListener(v -> enableEditTextFocus());
+
+        recordButton.setOnClickListener(v -> startRecording());
+        stopButton.setOnClickListener(v -> stopRecording());
+        transcribeButton.setOnClickListener(v -> transcribeAudio());
+        translateButton.setOnClickListener(v -> translateAudio());
+
         Button gpt3Button = findViewById(R.id.gpt3_button);
-        gpt3Button.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                String text = transcriptionTextView.getText().toString();
-                sendTextToGpt3(text);
-            }
+        gpt3Button.setOnClickListener(v -> {
+            String text = transcriptionTextView.getText().toString();
+
+            // Retrieve the API key and voice ID from SharedPreferences
+            SharedPreferences sharedPreferences = getSharedPreferences("API_KEYS", MODE_PRIVATE);
+            String elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
+            String voiceId = sharedPreferences.getString("VOICE_ID", "");
+
+            // Pass the retrieved values to the sendTextToGpt3 method
+            sendTextToGpt3(text, elevenLabsApiKey, voiceId);
         });
+
         Button copyButton = findViewById(R.id.copy_button);
-        copyButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View view) {
-                copyTextToClipboard();
-            }
-        });
+        copyButton.setOnClickListener(v -> copyTextToClipboard());
+    }
+    @Override
+    public boolean onCreateOptionsMenu(Menu menu) {
+        getMenuInflater().inflate(R.menu.menu_main, menu);
+        return true;
+    }
+    @Override
+    public boolean onOptionsItemSelected(MenuItem item) {
+        if (item.getItemId() == R.id.action_settings) {
+            Intent settingsIntent = new Intent(MainActivity.this, SettingsActivity.class);
+            startActivityForResult(settingsIntent, SETTINGS_REQUEST_CODE);
+            return true;
+        }
+        return super.onOptionsItemSelected(item);
+    }
+    @Override
+    protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
+        super.onActivityResult(requestCode, resultCode, data);
+
+        if (requestCode == SETTINGS_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+            String gptApiKey = data.getStringExtra("GPT_API_KEY");
+            String elevenLabsApiKey = data.getStringExtra("ELEVEN_LABS_API_KEY");
+            String voiceId = data.getStringExtra("VOICE_ID");
+        }
     }
     private void startRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -311,27 +339,23 @@ public class MainActivity extends AppCompatActivity {
     }
     private JsonArray messagesArray = new JsonArray();
 
-    private void sendTextToGpt3(String text) {
+    private void sendTextToGpt3(String text, String elevenLabsApiKey, String voiceId) {
         progressDialog = new ProgressDialog(this);
         progressDialog.setMessage("Sending to GPT-3.5 Turbo...");
         progressDialog.setCancelable(false);
         progressDialog.show();
-
         String token = "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";
-
         // Add user message to the messagesArray
         JsonObject userMessage = new JsonObject();
         userMessage.addProperty("role", "user");
         userMessage.addProperty("content", text);
         messagesArray.add(userMessage);
-
         JsonObject jsonObject = new JsonObject();
         jsonObject.addProperty("model", "gpt-3.5-turbo");
         jsonObject.add("messages", messagesArray);
         jsonObject.addProperty("max_tokens", 500);
         jsonObject.addProperty("n", 1);
         jsonObject.addProperty("temperature", 0.5);
-
         gpt3Service.chatCompletion("Bearer " + token, RequestBody.create(jsonObject.toString(), MediaType.parse("application/json"))).enqueue(new Callback<ResponseBody>() {
             @Override
             public void onResponse(@NonNull Call<ResponseBody> call, @NonNull Response<ResponseBody> response) {
@@ -349,6 +373,10 @@ public class MainActivity extends AppCompatActivity {
                                 transcriptionTextView.setText(generatedText);
                             }
                         });
+                        // Call getAudioResponseFromElevenLabs if ELEVEN_LABS_API_KEY and VOICE_ID are not empty
+                        if (!elevenLabsApiKey.isEmpty() && !voiceId.isEmpty()) {
+                            getAudioResponseFromElevenLabs(generatedText, elevenLabsApiKey, voiceId);
+                        }
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -369,7 +397,6 @@ public class MainActivity extends AppCompatActivity {
                         }
                     });
                 }
-
             }
             @Override
             public void onFailure(Call<ResponseBody> call, Throwable t) {
@@ -390,6 +417,58 @@ public class MainActivity extends AppCompatActivity {
 
         });
     }
+    private void getAudioResponseFromElevenLabs(String text, String apiKey, String voiceId) {
+            JsonObject jsonObject = new JsonObject();
+            jsonObject.addProperty("text", text);
+            JsonObject voiceSettings = new JsonObject();
+            voiceSettings.addProperty("stability", 0);
+            voiceSettings.addProperty("similarity_boost", 0);
+            jsonObject.add("voice_settings", voiceSettings);
+
+            elevenLabsService.textToSpeech(voiceId, apiKey, RequestBody.create(jsonObject.toString(), MediaType.parse("application/json"))).enqueue(new Callback<ResponseBody>() {
+                @Override
+                public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                    if (response.isSuccessful()) {
+                        try {
+                            File tempMp3 = File.createTempFile("response", "mp3", getCacheDir());
+                            tempMp3.deleteOnExit();
+                            FileOutputStream fos = new FileOutputStream(tempMp3);
+                            InputStream is = new BufferedInputStream(response.body().byteStream());
+                            byte[] buffer = new byte[1024];
+                            int bytesRead;
+                            while ((bytesRead = is.read(buffer)) != -1) {
+                                fos.write(buffer, 0, bytesRead);
+                            }
+                            fos.flush();
+                            fos.close();
+                            is.close();
+
+                            playAudio(tempMp3.getAbsolutePath());
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        Log.e("ElevenLabsError", "Unsuccessful response: " + response.code());
+                    }
+                }
+
+                @Override
+                public void onFailure(Call<ResponseBody> call, Throwable t) {
+                    Log.e("ElevenLabsError", "Request failed: ", t);
+                }
+            });
+        }
+
+        private void playAudio(String audioFilePath) {
+            MediaPlayer mediaPlayer = new MediaPlayer();
+            try {
+                mediaPlayer.setDataSource(audioFilePath);
+                mediaPlayer.prepare();
+                mediaPlayer.start();
+            } catch (IOException e) {
+                e.printStackTrace();
+            }
+        }
     private void copyTextToClipboard() {
         String textToCopy = transcriptionTextView.getText().toString();
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
