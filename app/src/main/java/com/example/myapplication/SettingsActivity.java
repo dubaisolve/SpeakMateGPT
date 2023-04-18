@@ -62,7 +62,6 @@ public class SettingsActivity extends AppCompatActivity {
         voices.add(new Voice("TxGEqnHWrfWFTfGW9XjX", "Josh", "https://storage.googleapis.com/eleven-public-prod/premade/voices/TxGEqnHWrfWFTfGW9XjX/c6c80dcd-5fe5-4a4c-a74c-b3fec4c62c67.mp3"));
         voices.add(new Voice("VR6AewLTigWG4xSOukaG", "Arnold", "https://storage.googleapis.com/eleven-public-prod/premade/voices/VR6AewLTigWG4xSOukaG/66e83dc2-6543-4897-9283-e028ac5ae4aa.mp3"));
 
-
         VoiceAdapter.OnItemClickListener onItemClickListener = previewUrl -> {
             // Handle the click event, e.g., open the link in a browser
             Intent browserIntent = new Intent(Intent.ACTION_VIEW, Uri.parse(previewUrl));
