@@ -108,33 +108,52 @@
             android:text=""
             android:textSize="18sp" />
     </ScrollView>
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/copy_button"
-        style="@style/FlatButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        app:icon="@drawable/copy_button"
-        app:iconSize="44dp"
-        app:iconTint="@color/button_icon_color"
-        app:iconGravity="textStart"
-        app:iconPadding="0dp"
-        android:backgroundTint="@color/button_background_color"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toStartOf="@+id/flush_button" />
-    <com.google.android.material.button.MaterialButton
-        android:id="@+id/flush_button"
-        style="@style/FlatButton"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginTop="8dp"
-        app:icon="@drawable/flush_button"
-        app:iconSize="44dp"
-        app:iconTint="@color/button_icon_color"
-        app:iconGravity="textStart"
-        app:iconPadding="0dp"
-        android:backgroundTint="@color/button_background_color"
-        app:layout_constraintBottom_toBottomOf="parent"
-        app:layout_constraintEnd_toEndOf="parent" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/stop_pause_button"
+            style="@style/FlatButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            app:icon="@drawable/stoppause_button"
+            app:iconSize="35dp"
+            app:iconTint="@color/button_icon_color"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            android:backgroundTint="@color/button_background_color"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/copy_button" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/copy_button"
+            style="@style/FlatButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            app:icon="@drawable/copy_button"
+            app:iconSize="35dp"
+            app:iconTint="@color/button_icon_color"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            android:backgroundTint="@color/button_background_color"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toStartOf="@+id/flush_button" />
+        <com.google.android.material.button.MaterialButton
+            android:id="@+id/flush_button"
+            style="@style/FlatButton"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginTop="4dp"
+            app:icon="@drawable/flush_button"
+            app:iconSize="35dp"
+            app:iconTint="@color/button_icon_color"
+            app:iconGravity="textStart"
+            app:iconPadding="0dp"
+            android:backgroundTint="@color/button_background_color"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
+        <View
+            android:id="@+id/media_controller_anchor"
+            android:layout_width="match_parent"
+            android:layout_height="0dp"
+            app:layout_constraintBottom_toBottomOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>

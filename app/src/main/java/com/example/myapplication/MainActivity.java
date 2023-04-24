@@ -1,4 +1,5 @@
 package com.example.myapplication;
+
 import android.Manifest;
 import android.app.ProgressDialog;
 import android.content.ClipData;
@@ -12,6 +13,7 @@ import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.os.Bundle;
 import android.os.Environment;
+import android.os.Handler;
 import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
@@ -19,7 +21,7 @@ import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
-import android.widget.TextView;
+import android.widget.MediaController;
 import android.widget.Toast;
 
 import androidx.annotation.ColorRes;
@@ -33,8 +35,13 @@ import com.google.android.material.button.MaterialButton;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
 import com.google.gson.JsonObject;
+
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileOutputStream;
 import java.io.IOException;
+import java.io.InputStream;
+
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
 import okhttp3.RequestBody;
@@ -45,12 +52,7 @@ import retrofit2.HttpException;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
-import android.os.Handler;
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileOutputStream;
-import java.io.InputStream;
-import okhttp3.ResponseBody;
+import android.widget.MediaController.MediaPlayerControl;
 public class MainActivity extends AppCompatActivity {
     private static final int SETTINGS_REQUEST_CODE = 1;
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
@@ -59,9 +61,78 @@ public class MainActivity extends AppCompatActivity {
     private static String fileName = null;
     private MediaRecorder recorder = null;
     private ProgressDialog progressDialog;
-    private MaterialButton recordButton, stopButton, transcribeButton , translateButton , flushButton;
+    private MaterialButton recordButton, stopButton, transcribeButton , translateButton , flushButton , stopPauseButton;
     private EditText transcriptionTextView;
+    private String audioFilePath;
+    private MediaPlayer mediaPlayer;
     private Handler fileSizeCheckHandler = new Handler();
+    // Add a variable for the MediaController
+    private MediaController mediaController;
+
+    // Implement a custom MediaPlayerControl
+    private MediaController.MediaPlayerControl mediaPlayerControl = new MediaController.MediaPlayerControl() {
+        @Override
+        public void start() {
+            if (mediaPlayer != null) {
+                mediaPlayer.start();
+            }
+        }
+
+        @Override
+        public void pause() {
+            if (mediaPlayer != null) {
+                mediaPlayer.pause();
+            }
+        }
+
+        @Override
+        public int getDuration() {
+            return mediaPlayer != null ? mediaPlayer.getDuration() : 0;
+        }
+
+        @Override
+        public int getCurrentPosition() {
+            return mediaPlayer != null ? mediaPlayer.getCurrentPosition() : 0;
+        }
+
+        @Override
+        public void seekTo(int pos) {
+            if (mediaPlayer != null) {
+                mediaPlayer.seekTo(pos);
+            }
+        }
+
+        @Override
+        public boolean isPlaying() {
+            return mediaPlayer != null && mediaPlayer.isPlaying();
+        }
+
+        @Override
+        public int getBufferPercentage() {
+            return 0;
+        }
+
+        @Override
+        public boolean canPause() {
+            return true;
+        }
+
+        @Override
+        public boolean canSeekBackward() {
+            return true;
+        }
+
+        @Override
+        public boolean canSeekForward() {
+            return true;
+        }
+
+        @Override
+        public int getAudioSessionId() {
+            return mediaPlayer != null ? mediaPlayer.getAudioSessionId() : 0;
+        }
+    };
+
 
     private void checkFileSizeAndWarn() {
         File audioFile = new File(fileName);
@@ -102,7 +173,9 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
-
+        mediaController = new MediaController(this);
+        mediaController.setMediaPlayer(mediaPlayerControl);
+        mediaController.setAnchorView(findViewById(R.id.media_controller_anchor));
         Retrofit retrofitElevenLabs = new Retrofit.Builder()
                 .baseUrl("https://api.elevenlabs.io/")
                 .addConverterFactory(GsonConverterFactory.create())
@@ -123,6 +196,7 @@ public class MainActivity extends AppCompatActivity {
         translateButton = findViewById(R.id.translateButton);
         flushButton = findViewById(R.id.flush_button);
         transcriptionTextView = findViewById(R.id.transcriptionTextView);
+        stopPauseButton = findViewById(R.id.stop_pause_button);
     }
 
     private void initListeners() {
@@ -153,6 +227,18 @@ public class MainActivity extends AppCompatActivity {
         });
         Button copyButton = findViewById(R.id.copy_button);
         copyButton.setOnClickListener(v -> copyTextToClipboard());
+        stopPauseButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                    pauseAudio();
+                    stopPauseButton.setText("Resume");
+                } else if (mediaPlayer != null) {
+                    playAudio(audioFilePath); // Save audioFilePath as a class variable to reuse here
+                    stopPauseButton.setText("Pause");
+                }
+            }
+        });
     }
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
@@ -462,8 +548,14 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }
-        private void playAudio(String audioFilePath) {
-            MediaPlayer mediaPlayer = new MediaPlayer();
+    private void playAudio(String audioFilePath) {
+        this.audioFilePath = audioFilePath;
+            if (mediaPlayer != null) {
+                mediaPlayer.reset();
+            } else {
+                mediaPlayer = new MediaPlayer();
+            }
+
             try {
                 mediaPlayer.setDataSource(audioFilePath);
                 mediaPlayer.prepare();
@@ -471,7 +563,20 @@ public class MainActivity extends AppCompatActivity {
             } catch (IOException e) {
                 e.printStackTrace();
             }
+        mediaController.show(0);
         }
+    private void pauseAudio() {
+        if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+            mediaPlayer.pause();
+        }
+    }
+
+    private void stopAudio() {
+        if (mediaPlayer != null) {
+            mediaPlayer.stop();
+            mediaPlayer.reset();
+        }
+    }
     private void copyTextToClipboard() {
         String textToCopy = transcriptionTextView.getText().toString();
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
