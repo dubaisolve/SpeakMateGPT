@@ -68,7 +68,9 @@ public class MainActivity extends AppCompatActivity {
     private Handler fileSizeCheckHandler = new Handler();
     // Add a variable for the MediaController
     private MediaController mediaController;
-
+    private String gptApiKey;
+    private String elevenLabsApiKey;
+    private String voiceId;
     // Implement a custom MediaPlayerControl
     private MediaController.MediaPlayerControl mediaPlayerControl = new MediaController.MediaPlayerControl() {
         @Override
@@ -132,8 +134,15 @@ public class MainActivity extends AppCompatActivity {
             return mediaPlayer != null ? mediaPlayer.getAudioSessionId() : 0;
         }
     };
-
-
+    private void updateListeners() {
+        Button gpt3Button = findViewById(R.id.gpt3_button);
+        transcribeButton.setOnClickListener(v -> transcribeAudio(gptApiKey));
+        translateButton.setOnClickListener(v -> translateAudio(gptApiKey));
+        gpt3Button.setOnClickListener(v -> {
+            String text = transcriptionTextView.getText().toString();
+            sendTextToGpt3(text, gptApiKey, elevenLabsApiKey, voiceId);
+        });
+    }
     private void checkFileSizeAndWarn() {
         File audioFile = new File(fileName);
         if (audioFile.length() > WARNING_THRESHOLD_BYTES) {
@@ -183,12 +192,12 @@ public class MainActivity extends AppCompatActivity {
         elevenLabsService = retrofitElevenLabs.create(ElevenLabsService.class);
         initViews();
         initListeners();
+        updateListeners();
         fileName = getExternalFilesDir(Environment.DIRECTORY_MUSIC) + "/audio.mp3";
         transcriptionService = createTranscriptionService();
         gpt3Service = createGpt3Service();
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_RECORD_AUDIO_PERMISSION);
     }
-
     private void initViews() {
         recordButton = findViewById(R.id.recordButton);
         stopButton = findViewById(R.id.stopButton);
@@ -232,10 +241,8 @@ public class MainActivity extends AppCompatActivity {
             public void onClick(View v) {
                 if (mediaPlayer != null && mediaPlayer.isPlaying()) {
                     pauseAudio();
-                    stopPauseButton.setText("Resume");
                 } else if (mediaPlayer != null) {
                     playAudio(audioFilePath); // Save audioFilePath as a class variable to reuse here
-                    stopPauseButton.setText("Pause");
                 }
             }
         });
@@ -259,10 +266,19 @@ public class MainActivity extends AppCompatActivity {
         super.onActivityResult(requestCode, resultCode, data);
 
         if (requestCode == SETTINGS_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
-            String gptApiKey = data.getStringExtra("GPT_API_KEY");
-            String elevenLabsApiKey = data.getStringExtra("ELEVEN_LABS_API_KEY");
-            String voiceId = data.getStringExtra("VOICE_ID");
+            gptApiKey = data.getStringExtra("GPT_API_KEY");
+            elevenLabsApiKey = data.getStringExtra("ELEVEN_LABS_API_KEY");
+            voiceId = data.getStringExtra("VOICE_ID");
+            updateListeners();
         }
+    }
+    @Override
+    protected void onResume() {
+        super.onResume();
+        SharedPreferences sharedPreferences = getSharedPreferences("API_KEYS", MODE_PRIVATE);
+        gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
+        elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
+        voiceId = sharedPreferences.getString("VOICE_ID", "");
     }
     private void startRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -493,6 +509,7 @@ public class MainActivity extends AppCompatActivity {
             }
             @Override
             public void onFailure(Call<ResponseBody> call, Throwable t) {
+                progressDialog.dismiss();
                 String errorMessage = "";
                 if (t instanceof HttpException) {
                     ResponseBody responseBody = ((HttpException) t).response().errorBody();
