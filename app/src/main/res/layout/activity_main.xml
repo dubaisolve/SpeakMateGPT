@@ -5,26 +5,24 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     tools:context=".MainActivity">
-
     <ImageView
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:src="?attr/app_backgroundImage"
         android:scaleType="centerCrop"
         />
-
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:padding="16dp">
-    <LinearLayout
-        android:id="@+id/button_layout"
-        android:layout_width="match_parent"
-        android:layout_height="wrap_content"
-        android:orientation="horizontal"
-        android:gravity="center_horizontal"
-        android:layout_marginTop="8dp"
-        app:layout_constraintTop_toTopOf="parent">
+        <LinearLayout
+            android:id="@+id/button_layout"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_horizontal"
+            android:layout_marginTop="8dp"
+            app:layout_constraintTop_toTopOf="parent">
         <com.google.android.material.button.MaterialButton
             android:id="@+id/recordButton"
             style="@style/FlatButton"
@@ -91,23 +89,34 @@
             app:iconPadding="0dp"
             android:backgroundTint="@color/button_background_color" />
     </LinearLayout>
-    <ScrollView
-        android:layout_width="match_parent"
-        android:layout_height="0dp"
-        android:layout_marginTop="16dp"
-        app:layout_constraintTop_toBottomOf="@+id/button_layout"
-        app:layout_constraintBottom_toBottomOf="parent">
-        <EditText
-            android:id="@+id/transcriptionTextView"
+        <ScrollView
+            android:id="@+id/myScrollView"
             android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:inputType="textMultiLine"
-            android:imeOptions="actionDone"
-            android:focusable="false"
-            android:focusableInTouchMode="false"
-            android:text=""
-            android:textSize="18sp" />
-    </ScrollView>
+            android:layout_height="0dp"
+            android:layout_marginTop="16dp"
+            app:layout_constraintTop_toBottomOf="@+id/button_layout"
+            app:layout_constraintBottom_toTopOf="@+id/media_controller_anchor">
+            <EditText
+                android:id="@+id/transcriptionTextView"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:inputType="textMultiLine"
+                android:imeOptions="actionDone"
+                android:focusable="false"
+                android:focusableInTouchMode="false"
+                android:text=""
+                android:textSize="18sp" />
+        </ScrollView>
+
+        <View
+            android:id="@+id/media_controller_anchor"
+            android:layout_width="74dp"
+            android:layout_height="18dp"
+            app:layout_constraintBottom_toTopOf="@+id/stop_pause_button"
+            app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintTop_toBottomOf="@id/myScrollView" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/stop_pause_button"
             style="@style/FlatButton"
@@ -122,6 +131,7 @@
             android:backgroundTint="@color/button_background_color"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/copy_button" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/copy_button"
             style="@style/FlatButton"
@@ -136,6 +146,7 @@
             android:backgroundTint="@color/button_background_color"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toStartOf="@+id/flush_button" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/flush_button"
             style="@style/FlatButton"
@@ -150,10 +161,6 @@
             android:backgroundTint="@color/button_background_color"
             app:layout_constraintBottom_toBottomOf="parent"
             app:layout_constraintEnd_toEndOf="parent" />
-        <View
-            android:id="@+id/media_controller_anchor"
-            android:layout_width="match_parent"
-            android:layout_height="0dp"
-            app:layout_constraintBottom_toBottomOf="parent" />
+
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>

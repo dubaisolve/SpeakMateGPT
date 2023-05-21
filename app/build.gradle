@@ -3,11 +3,11 @@ plugins {
 }
 
 android {
-    namespace 'com.example.myapplication'
+    namespace 'com.dubaisolve.speakmate'
     compileSdk 33
 
     defaultConfig {
-        applicationId "com.example.myapplication"
+        applicationId "com.dubaisolve.speakmate"
         minSdk 24
         targetSdk 33
         versionCode 1
