@@ -37,8 +37,11 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.concurrent.TimeUnit;
+
 import okhttp3.MediaType;
 import okhttp3.MultipartBody;
+import okhttp3.OkHttpClient;
 import okhttp3.RequestBody;
 import okhttp3.ResponseBody;
 import retrofit2.Call;
@@ -65,6 +68,10 @@ public class MainActivity extends AppCompatActivity {
     private String gptApiKey;
     private String elevenLabsApiKey;
     private String voiceId;
+    private String model;
+    private String maxTokens ;
+    private String n;
+    private String temperature;
     // Implement a custom MediaPlayerControl
     private MediaController.MediaPlayerControl mediaPlayerControl = new MediaController.MediaPlayerControl() {
         @Override
@@ -134,7 +141,7 @@ public class MainActivity extends AppCompatActivity {
         translateButton.setOnClickListener(v -> translateAudio(gptApiKey));
         gpt3Button.setOnClickListener(v -> {
             String text = transcriptionTextView.getText().toString();
-            sendTextToGpt3(text, gptApiKey, elevenLabsApiKey, voiceId);
+            sendTextToGpt3(text, gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
         });
     }
     private void checkFileSizeAndWarn() {
@@ -153,10 +160,18 @@ public class MainActivity extends AppCompatActivity {
     private Gpt3Service gpt3Service;
     private ElevenLabsService elevenLabsService;
     private Gpt3Service createGpt3Service() {
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS) // connect timeout
+                .writeTimeout(60, TimeUnit.SECONDS) // write timeout
+                .readTimeout(90, TimeUnit.SECONDS) // read timeout
+                .build();
+
         Retrofit retrofit = new Retrofit.Builder()
                 .baseUrl("https://api.openai.com/v1/")
                 .addConverterFactory(GsonConverterFactory.create())
+                .client(client) // add this line
                 .build();
+
         return retrofit.create(Gpt3Service.class);
     }
     private void updateRecordButtonIconColor(@ColorRes int colorResId) {
@@ -179,17 +194,33 @@ public class MainActivity extends AppCompatActivity {
         mediaController = new MediaController(this);
         mediaController.setMediaPlayer(mediaPlayerControl);
         mediaController.setAnchorView(findViewById(R.id.media_controller_anchor));
+
+        OkHttpClient client = new OkHttpClient.Builder()
+                .connectTimeout(60, TimeUnit.SECONDS) // connect timeout
+                .writeTimeout(60, TimeUnit.SECONDS) // write timeout
+                .readTimeout(90, TimeUnit.SECONDS) // read timeout
+                .build();
+
         Retrofit retrofitElevenLabs = new Retrofit.Builder()
                 .baseUrl("https://api.elevenlabs.io/")
                 .addConverterFactory(GsonConverterFactory.create())
+                .client(client) // add this line
                 .build();
         elevenLabsService = retrofitElevenLabs.create(ElevenLabsService.class);
+
         initViews();
         initListeners();
         updateListeners();
         fileName = getExternalFilesDir(Environment.DIRECTORY_MUSIC) + "/audio.mp3";
         transcriptionService = createTranscriptionService();
-        gpt3Service = createGpt3Service();
+
+        Retrofit retrofitOpenAI = new Retrofit.Builder()
+                .baseUrl("https://api.openai.com/v1/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .client(client) // add this line
+                .build();
+        gpt3Service = retrofitOpenAI.create(Gpt3Service.class);
+
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_RECORD_AUDIO_PERMISSION);
     }
     private void initViews() {
@@ -208,8 +239,12 @@ public class MainActivity extends AppCompatActivity {
         String gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
         String elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
         String voiceId = sharedPreferences.getString("VOICE_ID", "");
-        transcriptionTextView.setOnClickListener(v -> enableEditTextFocus());
+        String model = sharedPreferences.getString("MODEL","gpt-3.5-turbo");
+        String maxTokens = sharedPreferences.getString("MAX_TOKENS", "500"); // default to 500 if not set
+        String n = sharedPreferences.getString("N", "1"); // default to 1 if not set
+        String temperature = sharedPreferences.getString("TEMPERATURE", "0.5"); // default to 0.5 if not set
 
+        transcriptionTextView.setOnClickListener(v -> enableEditTextFocus());
         recordButton.setOnClickListener(v -> startRecording());
         stopButton.setOnClickListener(v -> stopRecording());
         transcribeButton.setOnClickListener(v -> transcribeAudio(gptApiKey));
@@ -220,7 +255,7 @@ public class MainActivity extends AppCompatActivity {
             String text = transcriptionTextView.getText().toString();
 
             // Pass the retrieved values to the sendTextToGpt3 method
-            sendTextToGpt3(text,gptApiKey,elevenLabsApiKey, voiceId);
+            sendTextToGpt3(text,gptApiKey,elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
         });
         flushButton.setOnClickListener(new View.OnClickListener() {
             @Override
@@ -263,6 +298,10 @@ public class MainActivity extends AppCompatActivity {
             gptApiKey = data.getStringExtra("GPT_API_KEY");
             elevenLabsApiKey = data.getStringExtra("ELEVEN_LABS_API_KEY");
             voiceId = data.getStringExtra("VOICE_ID");
+            model = data.getStringExtra("MODEL");
+            maxTokens = data.getStringExtra("MAX_TOKENS");
+            n = data.getStringExtra("N");
+            temperature = data.getStringExtra("TEMPERATURE");
             updateListeners();
         }
     }
@@ -273,6 +312,11 @@ public class MainActivity extends AppCompatActivity {
         gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
         elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
         voiceId = sharedPreferences.getString("VOICE_ID", "");
+        model = sharedPreferences.getString("MODEL","gpt-3.5-turbo");
+        maxTokens = sharedPreferences.getString("MAX_TOKENS", "500"); // default to 500 if not set
+        n = sharedPreferences.getString("N", "1"); // default to 1 if not set
+        temperature = sharedPreferences.getString("TEMPERATURE", "0.5"); // default to 0.5 if not set
+
     }
     private void startRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
@@ -442,9 +486,9 @@ public class MainActivity extends AppCompatActivity {
     }
     private JsonArray messagesArray = new JsonArray();
 
-    private void sendTextToGpt3(String text, String gptApiKey, String elevenLabsApiKey, String voiceId) {
+    private void sendTextToGpt3(String text, String gptApiKey, String elevenLabsApiKey, String voiceId,String model,String maxTokens,String n,String temperature) {
         progressDialog = new ProgressDialog(this);
-        progressDialog.setMessage("Sending to GPT-3.5 Turbo...");
+        progressDialog.setMessage("Sending to AI...");
         progressDialog.setCancelable(false);
         progressDialog.show();
         String token = gptApiKey;
@@ -454,11 +498,26 @@ public class MainActivity extends AppCompatActivity {
         userMessage.addProperty("content", text);
         messagesArray.add(userMessage);
         JsonObject jsonObject = new JsonObject();
-        jsonObject.addProperty("model", "gpt-3.5-turbo");
+        jsonObject.addProperty("model", model);
         jsonObject.add("messages", messagesArray);
-        jsonObject.addProperty("max_tokens", 500);
-        jsonObject.addProperty("n", 1);
-        jsonObject.addProperty("temperature", 0.5);
+
+        try {
+            jsonObject.addProperty("max_tokens", Integer.parseInt(maxTokens));
+        } catch (NumberFormatException e) {
+            jsonObject.addProperty("max_tokens", 500); // Default value
+        }
+
+        try {
+            jsonObject.addProperty("n", Integer.parseInt(n));
+        } catch (NumberFormatException e) {
+            jsonObject.addProperty("n", 1); // Default value
+        }
+
+        try {
+            jsonObject.addProperty("temperature", Double.parseDouble(temperature));
+        } catch (NumberFormatException e) {
+            jsonObject.addProperty("temperature", 0.5); // Default value
+        }
         gpt3Service.chatCompletion("Bearer " + gptApiKey, RequestBody.create(jsonObject.toString(), MediaType.parse("application/json"))).enqueue(new Callback<ResponseBody>() {
             @Override
             public void onResponse(@NonNull Call<ResponseBody> call, @NonNull Response<ResponseBody> response) {
@@ -521,17 +580,17 @@ public class MainActivity extends AppCompatActivity {
 
         });
     }
-    private void getAudioResponseFromElevenLabs(String text, String apiKey, String voiceId) {
-            JsonObject jsonObject = new JsonObject();
-            jsonObject.addProperty("text", text);
-            JsonObject voiceSettings = new JsonObject();
-            voiceSettings.addProperty("stability", 0);
-            voiceSettings.addProperty("similarity_boost", 0);
-            jsonObject.add("voice_settings", voiceSettings);
-            elevenLabsService.textToSpeech(voiceId, apiKey, RequestBody.create(jsonObject.toString(), MediaType.parse("application/json"))).enqueue(new Callback<ResponseBody>() {
-                @Override
-                public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
-                    if (response.isSuccessful()) {
+    private void getAudioResponseFromElevenLabs(String text, String elevenLabsApiKey, String voiceId) {
+        JsonObject jsonObject = new JsonObject();
+        jsonObject.addProperty("text", text);
+        JsonObject voiceSettings = new JsonObject();
+        voiceSettings.addProperty("stability", 0);
+        voiceSettings.addProperty("similarity_boost", 0);
+        jsonObject.add("voice_settings", voiceSettings);
+        elevenLabsService.textToSpeech(voiceId, elevenLabsApiKey, RequestBody.create(jsonObject.toString(), MediaType.parse("application/json"))).enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                if (response.isSuccessful()) {
                         try {
                             File tempMp3 = File.createTempFile("response", "mp3", getCacheDir());
                             tempMp3.deleteOnExit();

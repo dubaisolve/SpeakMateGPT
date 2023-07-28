@@ -17,8 +17,8 @@ import com.google.android.material.textfield.TextInputEditText;
 import java.util.ArrayList;
 import java.util.List;
 public class SettingsActivity extends AppCompatActivity {
-    private TextInputEditText gptApiKeyEditText, elevenLabsApiKeyEditText, elevenLabsVoiceIdEditText;
-    private String gptApiKey, elevenLabsApiKey, voiceId;
+    private TextInputEditText gptApiKeyEditText, elevenLabsApiKeyEditText, elevenLabsVoiceIdEditText,modelEditText,maxTokensEditText,nEditText,temperatureEditText;
+    private String gptApiKey, elevenLabsApiKey, voiceId,model,maxTokens,n,temperature;
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -27,6 +27,10 @@ public class SettingsActivity extends AppCompatActivity {
         gptApiKeyEditText = findViewById(R.id.gpt_api_key_edit_text);
         elevenLabsApiKeyEditText = findViewById(R.id.eleven_labs_api_key_edit_text);
         elevenLabsVoiceIdEditText = findViewById(R.id.eleven_labs_voice_id_edit_text);
+        modelEditText = findViewById(R.id.model_edit_text);
+        maxTokensEditText = findViewById(R.id.max_tokens_edit_text);
+        nEditText = findViewById(R.id.n_edit_text);
+        temperatureEditText = findViewById(R.id.temperature_edit_text);
         loadData();
         Button saveButton = findViewById(R.id.save_button);
         saveButton.setOnClickListener(new View.OnClickListener() {
@@ -38,6 +42,11 @@ public class SettingsActivity extends AppCompatActivity {
                 resultIntent.putExtra("GPT_API_KEY", gptApiKey);
                 resultIntent.putExtra("ELEVEN_LABS_API_KEY", elevenLabsApiKey);
                 resultIntent.putExtra("VOICE_ID", voiceId);
+                resultIntent.putExtra("MODEL", model);
+                resultIntent.putExtra("MAX_TOKENS", maxTokens);
+                resultIntent.putExtra("N", n);
+                resultIntent.putExtra("TEMPERATURE", temperature);
+
                 setResult(RESULT_OK, resultIntent);
                 finish();
             }
@@ -66,19 +75,36 @@ public class SettingsActivity extends AppCompatActivity {
         gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
         elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
         voiceId = sharedPreferences.getString("VOICE_ID", "");
+        model = sharedPreferences.getString("MODEL", "");
+        maxTokens = sharedPreferences.getString("MAX_TOKENS", "");
+        n = sharedPreferences.getString("N", "");
+        temperature = sharedPreferences.getString("TEMPERATURE", "");
         gptApiKeyEditText.setText(gptApiKey);
         elevenLabsApiKeyEditText.setText(elevenLabsApiKey);
         elevenLabsVoiceIdEditText.setText(voiceId);
+        modelEditText.setText(model);
+        maxTokensEditText.setText(maxTokens);
+        nEditText.setText(n);
+        temperatureEditText.setText(temperature);
     }
     private void saveData() {
         gptApiKey = gptApiKeyEditText.getText().toString();
         elevenLabsApiKey = elevenLabsApiKeyEditText.getText().toString();
         voiceId = elevenLabsVoiceIdEditText.getText().toString();
+        model = modelEditText.getText().toString();
+        maxTokens = maxTokensEditText.getText().toString();
+        n = nEditText.getText().toString();
+        temperature = temperatureEditText.getText().toString();
+
         SharedPreferences sharedPreferences = getSharedPreferences("API_KEYS", MODE_PRIVATE);
         SharedPreferences.Editor editor = sharedPreferences.edit();
         editor.putString("GPT_API_KEY", gptApiKey);
         editor.putString("ELEVEN_LABS_API_KEY", elevenLabsApiKey);
         editor.putString("VOICE_ID", voiceId);
+        editor.putString("MODEL", model);
+        editor.putString("MAX_TOKENS", maxTokens);
+        editor.putString("N", n);
+        editor.putString("TEMPERATURE", temperature);
         editor.apply();
     }
     @Override

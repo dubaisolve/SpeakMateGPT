@@ -110,10 +110,11 @@
 
         <View
             android:id="@+id/media_controller_anchor"
-            android:layout_width="74dp"
-            android:layout_height="18dp"
+            android:layout_width="254dp"
+            android:layout_height="55dp"
             app:layout_constraintBottom_toTopOf="@+id/stop_pause_button"
             app:layout_constraintEnd_toEndOf="parent"
+            app:layout_constraintHorizontal_bias="0.498"
             app:layout_constraintStart_toStartOf="parent"
             app:layout_constraintTop_toBottomOf="@id/myScrollView" />
 
