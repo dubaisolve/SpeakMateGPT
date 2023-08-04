@@ -28,6 +28,9 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.recyclerview.widget.LinearLayoutManager;
+import androidx.recyclerview.widget.RecyclerView;
+
 import com.google.android.material.button.MaterialButton;
 import com.google.gson.Gson;
 import com.google.gson.JsonArray;
@@ -37,6 +40,8 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.ArrayList;
+import java.util.List;
 import java.util.concurrent.TimeUnit;
 
 import okhttp3.MediaType;
@@ -59,7 +64,7 @@ public class MainActivity extends AppCompatActivity {
     private MediaRecorder recorder = null;
     private ProgressDialog progressDialog;
     private MaterialButton recordButton, stopButton, transcribeButton , translateButton , flushButton , stopPauseButton;
-    private EditText transcriptionTextView;
+
     private String audioFilePath;
     private MediaPlayer mediaPlayer;
     private Handler fileSizeCheckHandler = new Handler();
@@ -72,6 +77,14 @@ public class MainActivity extends AppCompatActivity {
     private String maxTokens ;
     private String n;
     private String temperature;
+
+    private RecyclerView recyclerView;
+    private MessageAdapter mAdapter;
+    private RecyclerView.LayoutManager layoutManager;
+    private List<Message> myDataset;
+    private EditText userInput;
+    private Button sendButton;
+
     // Implement a custom MediaPlayerControl
     private MediaController.MediaPlayerControl mediaPlayerControl = new MediaController.MediaPlayerControl() {
         @Override
@@ -140,8 +153,15 @@ public class MainActivity extends AppCompatActivity {
         transcribeButton.setOnClickListener(v -> transcribeAudio(gptApiKey));
         translateButton.setOnClickListener(v -> translateAudio(gptApiKey));
         gpt3Button.setOnClickListener(v -> {
-            String text = transcriptionTextView.getText().toString();
-            sendTextToGpt3(text, gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
+            // Build a string that contains the entire conversation history
+            StringBuilder conversation = new StringBuilder();
+            for (Message message : myDataset) {
+                // Append the sender and the content of each message to the conversation
+                conversation.append(message.getSender()).append(": ").append(message.getContent()).append("\n");
+            }
+
+            // Send the entire conversation history to GPT-3
+            sendTextToGpt3(conversation.toString(), gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
         });
     }
     private void checkFileSizeAndWarn() {
@@ -151,11 +171,11 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     private void enableEditTextFocus() {
-        transcriptionTextView.setFocusable(true);
-        transcriptionTextView.setFocusableInTouchMode(true);
-        transcriptionTextView.requestFocus();
+        userInput.setFocusable(true);
+        userInput.setFocusableInTouchMode(true);
+        userInput.requestFocus();
         InputMethodManager imm = (InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE);
-        imm.showSoftInput(transcriptionTextView, InputMethodManager.SHOW_IMPLICIT);
+        imm.showSoftInput(userInput, InputMethodManager.SHOW_IMPLICIT);
     }
     private Gpt3Service gpt3Service;
     private ElevenLabsService elevenLabsService;
@@ -191,9 +211,34 @@ public class MainActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
+
+        // RecyclerView setup
+        recyclerView = (RecyclerView) findViewById(R.id.message_list);
+        recyclerView.setHasFixedSize(true);
+        layoutManager = new LinearLayoutManager(this);
+        recyclerView.setLayoutManager(layoutManager);
+        myDataset = new ArrayList<>(); // Moved out of local scope
+        mAdapter = new MessageAdapter(myDataset);
+        recyclerView.setAdapter(mAdapter);
+
+        // EditText and Button setup
+        userInput = findViewById(R.id.user_input);
+        sendButton = findViewById(R.id.send_button);
+        sendButton.setOnClickListener(v -> {
+            String text = userInput.getText().toString().trim();
+            if (!text.isEmpty()) {
+                Message userMessage = new Message("User", text);
+                myDataset.add(userMessage);
+                mAdapter.notifyItemInserted(myDataset.size() - 1);
+                layoutManager.scrollToPosition(myDataset.size() - 1);
+                userInput.setText("");
+            }
+        });
+
+        // Remaining setup code
         mediaController = new MediaController(this);
         mediaController.setMediaPlayer(mediaPlayerControl);
-        mediaController.setAnchorView(findViewById(R.id.media_controller_anchor));
+        mediaController.setAnchorView(findViewById(R.id.message_list));
 
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(60, TimeUnit.SECONDS) // connect timeout
@@ -204,7 +249,7 @@ public class MainActivity extends AppCompatActivity {
         Retrofit retrofitElevenLabs = new Retrofit.Builder()
                 .baseUrl("https://api.elevenlabs.io/")
                 .addConverterFactory(GsonConverterFactory.create())
-                .client(client) // add this line
+                .client(client)
                 .build();
         elevenLabsService = retrofitElevenLabs.create(ElevenLabsService.class);
 
@@ -217,7 +262,7 @@ public class MainActivity extends AppCompatActivity {
         Retrofit retrofitOpenAI = new Retrofit.Builder()
                 .baseUrl("https://api.openai.com/v1/")
                 .addConverterFactory(GsonConverterFactory.create())
-                .client(client) // add this line
+                .client(client)
                 .build();
         gpt3Service = retrofitOpenAI.create(Gpt3Service.class);
 
@@ -229,7 +274,6 @@ public class MainActivity extends AppCompatActivity {
         transcribeButton = findViewById(R.id.transcribeButton);
         translateButton = findViewById(R.id.translateButton);
         flushButton = findViewById(R.id.flush_button);
-        transcriptionTextView = findViewById(R.id.transcriptionTextView);
         stopPauseButton = findViewById(R.id.stop_pause_button);
     }
 
@@ -244,7 +288,7 @@ public class MainActivity extends AppCompatActivity {
         String n = sharedPreferences.getString("N", "1"); // default to 1 if not set
         String temperature = sharedPreferences.getString("TEMPERATURE", "0.5"); // default to 0.5 if not set
 
-        transcriptionTextView.setOnClickListener(v -> enableEditTextFocus());
+        // Refactor the listeners
         recordButton.setOnClickListener(v -> startRecording());
         stopButton.setOnClickListener(v -> stopRecording());
         transcribeButton.setOnClickListener(v -> transcribeAudio(gptApiKey));
@@ -252,27 +296,26 @@ public class MainActivity extends AppCompatActivity {
 
         Button gpt3Button = findViewById(R.id.gpt3_button);
         gpt3Button.setOnClickListener(v -> {
-            String text = transcriptionTextView.getText().toString();
-
-            // Pass the retrieved values to the sendTextToGpt3 method
-            sendTextToGpt3(text,gptApiKey,elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
-        });
-        flushButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                flushMessages();
+            String text = "";
+            for (int i = myDataset.size() - 1; i >= 0; i--) {
+                Message message = myDataset.get(i);
+                if ("User".equals(message.getSender())) {
+                    text = message.getContent();
+                    break;
+                }
             }
+            sendTextToGpt3(text, gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
         });
+
+        flushButton.setOnClickListener(v -> flushMessages());
         Button copyButton = findViewById(R.id.copy_button);
         copyButton.setOnClickListener(v -> copyTextToClipboard());
-        stopPauseButton.setOnClickListener(new View.OnClickListener() {
-            @Override
-            public void onClick(View v) {
-                if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-                    pauseAudio();
-                } else if (mediaPlayer != null) {
-                    playAudio(audioFilePath); // Save audioFilePath as a class variable to reuse here
-                }
+
+        stopPauseButton.setOnClickListener(v -> {
+            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                pauseAudio();
+            } else if (mediaPlayer != null) {
+                playAudio(audioFilePath); // Save audioFilePath as a class variable to reuse here
             }
         });
     }
@@ -388,7 +431,10 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                transcriptionTextView.setText(transcription);
+                                Message aiMessage = new Message("User", transcription);
+                                myDataset.add(aiMessage);
+                                mAdapter.notifyItemInserted(myDataset.size() - 1);
+                                layoutManager.scrollToPosition(myDataset.size() - 1);
                             }
                         });
                     } catch (IOException e) {
@@ -449,7 +495,10 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                transcriptionTextView.setText(translation);
+                                Message aiMessage = new Message("User", translation);
+                                myDataset.add(aiMessage);
+                                mAdapter.notifyItemInserted(myDataset.size() - 1);
+                                layoutManager.scrollToPosition(myDataset.size() - 1);
                             }
                         });
                     } catch (IOException e) {
@@ -532,9 +581,13 @@ public class MainActivity extends AppCompatActivity {
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                transcriptionTextView.setText(generatedText);
+                                Message aiMessage = new Message("AI", generatedText);
+                                myDataset.add(aiMessage);
+                                mAdapter.notifyItemInserted(myDataset.size() - 1);
+                                layoutManager.scrollToPosition(myDataset.size() - 1);
                             }
                         });
+
                         // Call getAudioResponseFromElevenLabs if ELEVEN_LABS_API_KEY and VOICE_ID are not empty
                         if (!elevenLabsApiKey.isEmpty() && !voiceId.isEmpty()) {
                             getAudioResponseFromElevenLabs(generatedText, elevenLabsApiKey, voiceId);
@@ -648,9 +701,12 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     private void copyTextToClipboard() {
-        String textToCopy = transcriptionTextView.getText().toString();
+        StringBuilder textToCopy = new StringBuilder();
+        for (Message message : myDataset) {
+            textToCopy.append(message.getSender()).append(": ").append(message.getContent()).append("\n");
+        }
         ClipboardManager clipboard = (ClipboardManager) getSystemService(Context.CLIPBOARD_SERVICE);
-        ClipData clip = ClipData.newPlainText("GPT-3.5 Turbo Response", textToCopy);
+        ClipData clip = ClipData.newPlainText("Chat Messages", textToCopy.toString());
         clipboard.setPrimaryClip(clip);
         Toast.makeText(this, "Text copied to clipboard", Toast.LENGTH_SHORT).show();
     }
@@ -658,7 +714,8 @@ public class MainActivity extends AppCompatActivity {
         // Clear messagesArray
         messagesArray = new JsonArray();
 
-        // Clear the transcriptionTextView
-        transcriptionTextView.setText("");
+        // Clear the chat messages
+        myDataset.clear();
+        mAdapter.notifyDataSetChanged();
     }
 }

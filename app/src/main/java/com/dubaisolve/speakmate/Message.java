@@ -1,41 +1,21 @@
 package com.dubaisolve.speakmate;
+
 public class Message {
-    public enum Role {
-        USER,
-        ASSISTANT
+    private String sender;
+    private String content;
+
+    // Constructor
+    public Message(String sender, String content) {
+        this.sender = sender;
+        this.content = content;
     }
 
-    private String text;
-    private long timestamp;
-    private Role role;
-
-    public Message(String text, long timestamp, Role role) {
-        this.text = text;
-        this.timestamp = timestamp;
-        this.role = role;
+    // Getter methods
+    public String getSender() {
+        return sender;
     }
 
-    public String getText() {
-        return text;
-    }
-
-    public void setText(String text) {
-        this.text = text;
-    }
-
-    public long getTimestamp() {
-        return timestamp;
-    }
-
-    public void setTimestamp(long timestamp) {
-        this.timestamp = timestamp;
-    }
-
-    public Role getRole() {
-        return role;
-    }
-
-    public void setRole(Role role) {
-        this.role = role;
+    public String getContent() {
+        return content;
     }
 }
