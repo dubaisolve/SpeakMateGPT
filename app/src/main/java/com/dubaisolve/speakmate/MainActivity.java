@@ -14,13 +14,16 @@ import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
 import android.util.Log;
+import android.view.ContextThemeWrapper;
 import android.view.Menu;
+import android.view.MenuInflater;
 import android.view.MenuItem;
 import android.view.View;
 import android.view.inputmethod.InputMethodManager;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.MediaController;
+import android.widget.PopupMenu;
 import android.widget.Toast;
 import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
@@ -63,7 +66,7 @@ public class MainActivity extends AppCompatActivity {
     private static String fileName = null;
     private MediaRecorder recorder = null;
     private ProgressDialog progressDialog;
-    private MaterialButton recordButton, stopButton, transcribeButton , translateButton , flushButton , stopPauseButton;
+    private MaterialButton recordButton;
 
     private String audioFilePath;
     private MediaPlayer mediaPlayer;
@@ -84,6 +87,8 @@ public class MainActivity extends AppCompatActivity {
     private List<Message> myDataset;
     private EditText userInput;
     private Button sendButton;
+    private boolean isRecording = false;
+    private PopupMenu popupMenu;
 
     // Implement a custom MediaPlayerControl
     private MediaController.MediaPlayerControl mediaPlayerControl = new MediaController.MediaPlayerControl() {
@@ -149,21 +154,7 @@ public class MainActivity extends AppCompatActivity {
         }
     };
     private void updateListeners() {
-        Button gpt3Button = findViewById(R.id.gpt3_button);
-        transcribeButton.setOnClickListener(v -> transcribeAudio(gptApiKey));
-        translateButton.setOnClickListener(v -> translateAudio(gptApiKey));
-        gpt3Button.setOnClickListener(v -> {
-            // Build a string that contains the entire conversation history
-            StringBuilder conversation = new StringBuilder();
-            for (Message message : myDataset) {
-                // Append the sender and the content of each message to the conversation
-                conversation.append(message.getSender()).append(": ").append(message.getContent()).append("\n");
-            }
-
-            // Send the entire conversation history to GPT-3
-            sendTextToGpt3(conversation.toString(), gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
-        });
-    }
+      }
     private void checkFileSizeAndWarn() {
         File audioFile = new File(fileName);
         if (audioFile.length() > WARNING_THRESHOLD_BYTES) {
@@ -270,11 +261,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private void initViews() {
         recordButton = findViewById(R.id.recordButton);
-        stopButton = findViewById(R.id.stopButton);
-        transcribeButton = findViewById(R.id.transcribeButton);
-        translateButton = findViewById(R.id.translateButton);
-        flushButton = findViewById(R.id.flush_button);
-        stopPauseButton = findViewById(R.id.stop_pause_button);
+        // Remove other lines related to buttons that are now in the popup menu
     }
 
     private void initListeners() {
@@ -289,33 +276,75 @@ public class MainActivity extends AppCompatActivity {
         String temperature = sharedPreferences.getString("TEMPERATURE", "0.5"); // default to 0.5 if not set
 
         // Refactor the listeners
-        recordButton.setOnClickListener(v -> startRecording());
-        stopButton.setOnClickListener(v -> stopRecording());
-        transcribeButton.setOnClickListener(v -> transcribeAudio(gptApiKey));
-        translateButton.setOnClickListener(v -> translateAudio(gptApiKey));
-
-        Button gpt3Button = findViewById(R.id.gpt3_button);
-        gpt3Button.setOnClickListener(v -> {
-            String text = "";
-            for (int i = myDataset.size() - 1; i >= 0; i--) {
-                Message message = myDataset.get(i);
-                if ("User".equals(message.getSender())) {
-                    text = message.getContent();
-                    break;
+        recordButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                if (isRecording) {
+                    stopRecording();
+                    transcribeAudio(gptApiKey); // Make sure you have the gptApiKey available here.
+                    isRecording = false;
+                } else {
+                    startRecording();
+                    isRecording = true;
                 }
             }
-            sendTextToGpt3(text, gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
         });
 
-        flushButton.setOnClickListener(v -> flushMessages());
-        Button copyButton = findViewById(R.id.copy_button);
-        copyButton.setOnClickListener(v -> copyTextToClipboard());
 
-        stopPauseButton.setOnClickListener(v -> {
-            if (mediaPlayer != null && mediaPlayer.isPlaying()) {
-                pauseAudio();
-            } else if (mediaPlayer != null) {
-                playAudio(audioFilePath); // Save audioFilePath as a class variable to reuse here
+        sendButton.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                String text = userInput.getText().toString().trim();
+                if (!text.isEmpty()) {
+                    // If there is text in the userInput, send it as a message
+                    Message userMessage = new Message("User", text);
+                    myDataset.add(userMessage);
+                    mAdapter.notifyItemInserted(myDataset.size() - 1);
+                    layoutManager.scrollToPosition(myDataset.size() - 1);
+                    userInput.setText("");
+                } else {
+                    // Otherwise, show the pop-up menu with icons
+                    PopupMenu popupMenu = new PopupMenu(MainActivity.this, v);
+                    MenuInflater inflater = popupMenu.getMenuInflater();
+                    inflater.inflate(R.menu.popup_menu, popupMenu.getMenu());
+
+                    popupMenu.setOnMenuItemClickListener(new PopupMenu.OnMenuItemClickListener() {
+                        @Override
+                        public boolean onMenuItemClick(MenuItem item) {
+                            switch (item.getItemId()) {
+                                case R.id.stop_pause_button:
+                                    if (mediaPlayer != null && mediaPlayer.isPlaying()) {
+                                        pauseAudio();
+                                    } else if (mediaPlayer != null) {
+                                        playAudio(audioFilePath);
+                                    }
+                                    return true;
+                                case R.id.copy_button:
+                                    copyTextToClipboard();
+                                    return true;
+                                case R.id.flush_button:
+                                    flushMessages();
+                                    return true;
+                                case R.id.translate_button:
+                                    translateAudio(gptApiKey);
+                                    return true;
+                                case R.id.send_gpt3_button:
+                                    // Build a string that contains the entire conversation history
+                                    StringBuilder conversation = new StringBuilder();
+                                    for (Message message : myDataset) {
+                                        // Append the sender and the content of each message to the conversation
+                                        conversation.append(message.getSender()).append(": ").append(message.getContent()).append("\n");
+                                    }
+                                    sendTextToGpt3(conversation.toString(), gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
+                                    return true;
+                                default:
+                                    return false;
+                            }
+                        }
+                    });
+
+                    popupMenu.show(); // Show the popup menu
+                }
             }
         });
     }

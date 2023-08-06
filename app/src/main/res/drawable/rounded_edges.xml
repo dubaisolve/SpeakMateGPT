@@ -1,0 +1,15 @@
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+    <item>
+        <shape>
+            <solid android:color="@color/button_icon_color" />
+            <corners android:radius="10dp" />
+        </shape>
+    </item>
+    <item android:left="2dp" android:right="2dp" android:top="2dp" android:bottom="2dp">
+        <shape>
+            <solid android:color="@color/text_bkgshape_color" />
+            <corners android:radius="8dp" />
+        </shape>
+    </item>
+</layer-list>
+

@@ -8,6 +8,10 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="button_icon_color">#FFFFFF</color>
+    <color name="text_bkgshape_color">#000000</color>
     <color name="button_background_color">#00000000</color>
+    <color name="mbutton_background_color">#FF018786</color>
+    <color name="text_color">#FFFFFF</color>
     <color name="red">#FF0000</color>
+    <color name="light_green">#90EE90</color>
 </resources>

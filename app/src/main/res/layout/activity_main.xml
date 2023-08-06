@@ -1,171 +1,71 @@
-<?xml version="1.0" encoding="utf-8"?>
 <FrameLayout xmlns:android="http://schemas.android.com/apk/res/android"
-    xmlns:app="http://schemas.android.com/apk/res-auto"
-    xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
+    xmlns:tools="http://schemas.android.com/tools"
     tools:context=".MainActivity">
-    <ImageView
-        android:layout_width="match_parent"
-        android:layout_height="match_parent"
-        android:src="?attr/app_backgroundImage"
-        android:scaleType="centerCrop"
-        />
+
+    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
+        android:src="?attr/app_backgroundImage" android:scaleType="centerCrop" />
+
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
-        android:padding="16dp">
-        <LinearLayout
-            android:id="@+id/button_layout"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:orientation="horizontal"
-            android:gravity="center_horizontal"
-            android:layout_marginTop="8dp"
-            app:layout_constraintTop_toTopOf="parent">
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/recordButton"
-            style="@style/FlatButton"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_margin="4dp"
-            android:layout_weight="1"
-            app:icon="@drawable/record_button"
-            app:iconSize="44dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/stopButton"
-            style="@style/FlatButton"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_margin="4dp"
-            android:layout_weight="1"
-            app:icon="@drawable/stop_button"
-            app:iconSize="44dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/transcribeButton"
-            style="@style/FlatButton"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_margin="4dp"
-            android:layout_weight="1"
-            app:icon="@drawable/transcribe_button"
-            app:iconSize="44dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/translateButton"
-            style="@style/FlatButton"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_margin="4dp"
-            android:layout_weight="1"
-            app:icon="@drawable/translate_button"
-            app:iconSize="44dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color" />
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/gpt3_button"
-            style="@style/FlatButton"
-            android:layout_width="0dp"
-            android:layout_height="64dp"
-            android:layout_margin="4dp"
-            android:layout_weight="1"
-            app:icon="@drawable/gpt3_button"
-            app:iconSize="44dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color" />
-        </LinearLayout>
+        android:padding="5dp">
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/message_list"
             android:layout_width="match_parent"
             android:layout_height="0dp"
-            android:layout_marginTop="16dp"
-            app:layout_constraintTop_toBottomOf="@+id/button_layout"
+            android:layout_marginTop="5dp"
+            app:layout_constraintTop_toTopOf="parent"
             app:layout_constraintBottom_toTopOf="@+id/user_message_layout" />
+
         <LinearLayout
             android:id="@+id/user_message_layout"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_marginBottom="16dp"
             android:orientation="horizontal"
-            app:layout_constraintBottom_toTopOf="@+id/stop_pause_button">
+            android:weightSum="100"
+            app:layout_constraintBottom_toBottomOf="parent">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/recordButton"
+                android:layout_width="0dp"
+                android:layout_weight="10"
+                android:layout_height="40dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/round_button"
+                app:icon="@drawable/record_button"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconSize="20dp"
+                app:iconTint="@color/button_icon_color" />
 
             <EditText
                 android:id="@+id/user_input"
                 android:layout_width="0dp"
-                android:layout_height="wrap_content"
-                android:layout_weight="1"
-                android:hint="Type your message here..." />
-
+                android:layout_height="40dp"
+                android:layout_weight="80"
+                android:hint="Type your message here..."
+                android:background="@drawable/rounded_edges"
+                android:inputType="textNoSuggestions"
+                android:textCursorDrawable="@drawable/no_underline"
+                android:textColor="@color/button_icon_color"
+                android:paddingLeft="8dp"
+                android:paddingRight="8dp" />
             <Button
                 android:id="@+id/send_button"
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
+                android:layout_width="0dp"
+                android:layout_weight="10"
+                android:layout_height="40dp"
+                android:layout_marginStart="4dp"
+                android:background="@drawable/round_button"
                 app:icon="@drawable/send"
-                app:iconSize="20dp"
-                app:iconTint="@color/button_icon_color"
                 app:iconGravity="textStart"
-                app:iconPadding="0dp"/>
-
+                app:iconPadding="0dp"
+                app:iconSize="20dp"
+                app:iconTint="@color/button_icon_color" />
         </LinearLayout>
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/stop_pause_button"
-            style="@style/FlatButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            app:icon="@drawable/stoppause_button"
-            app:iconSize="35dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/copy_button" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/copy_button"
-            style="@style/FlatButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            app:icon="@drawable/copy_button"
-            app:iconSize="35dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toStartOf="@+id/flush_button" />
-
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/flush_button"
-            style="@style/FlatButton"
-            android:layout_width="wrap_content"
-            android:layout_height="wrap_content"
-            android:layout_marginTop="4dp"
-            app:icon="@drawable/flush_button"
-            app:iconSize="35dp"
-            app:iconTint="@color/button_icon_color"
-            app:iconGravity="textStart"
-            app:iconPadding="0dp"
-            android:backgroundTint="@color/button_background_color"
-            app:layout_constraintBottom_toBottomOf="parent"
-            app:layout_constraintEnd_toEndOf="parent" />
-
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
