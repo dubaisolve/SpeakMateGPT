@@ -4,6 +4,7 @@ import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
+import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
 
@@ -45,7 +46,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
     // Replace the contents of a view (invoked by the layout manager)
     // Replace the contents of a view (invoked by the layout manager)
     @Override
-    public void onBindViewHolder(ViewHolder holder, int position) {
+    public void onBindViewHolder(final ViewHolder holder, int position) {
         // Get element from your dataset at this position
         Message message = messages.get(position);
 
@@ -53,26 +54,32 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
         holder.senderTextView.setText(message.getSender());
         holder.contentTextView.setText(message.getContent());
 
-        // Set the width of the content TextView to 80% of the parent's width
-        int contentWidth = (int) (holder.itemView.getWidth() * 0.8);
-        holder.contentTextView.getLayoutParams().width = contentWidth;
+        holder.itemView.post(new Runnable() {
+            @Override
+            public void run() {
+                int maxContentWidth = (int) (holder.itemView.getWidth() * 0.8);
+                holder.contentTextView.setMaxWidth(maxContentWidth);
+                holder.contentTextView.getLayoutParams().width = ViewGroup.LayoutParams.WRAP_CONTENT;
 
-        // Align views based on sender
-        if ("User".equals(message.getSender())) {
-            // Align to the right for user messages
-            holder.contentTextView.setGravity(Gravity.END);
+                RelativeLayout.LayoutParams params = (RelativeLayout.LayoutParams) holder.contentTextView.getLayoutParams();
 
-            // Set text color to light green for user messages
-            holder.contentTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.light_green));
-        } else {
-            // Align to the left for other messages
-            holder.contentTextView.setGravity(Gravity.START);
-
-            // Set text color to default (you can define another color for non-user messages)
-            holder.contentTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.button_icon_color));
-        }
+                if ("User".equals(message.getSender())) {
+                    // Align to the right for user messages
+                    params.addRule(RelativeLayout.ALIGN_PARENT_RIGHT);
+                    holder.contentTextView.setGravity(Gravity.END);
+                    holder.contentTextView.setBackgroundResource(R.drawable.rounded_user_message);
+                    holder.contentTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.button_icon_color));
+                } else {
+                    // Align to the left for other messages
+                    params.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
+                    holder.contentTextView.setGravity(Gravity.START);
+                    holder.contentTextView.setBackgroundResource(R.drawable.rounded_other_message);
+                    holder.contentTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.button_icon_color));
+                }
+                holder.contentTextView.setLayoutParams(params);
+            }
+        });
     }
-
     // Return the size of your dataset (invoked by the layout manager)
     @Override
     public int getItemCount() {
