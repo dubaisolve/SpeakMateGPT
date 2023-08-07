@@ -10,6 +10,7 @@ import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
+import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
@@ -31,6 +32,7 @@ import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
+import androidx.core.content.FileProvider;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
@@ -226,6 +228,7 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
+
         // Remaining setup code
         mediaController = new MediaController(this);
         mediaController.setMediaPlayer(mediaPlayerControl);
@@ -312,6 +315,9 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public boolean onMenuItemClick(MenuItem item) {
                             switch (item.getItemId()) {
+                                case R.id.save_audio_button:
+                                    shareAudioFile(audioFilePath);
+                                    return true;
                                 case R.id.stop_pause_button:
                                     if (mediaPlayer != null && mediaPlayer.isPlaying()) {
                                         pauseAudio();
@@ -674,7 +680,7 @@ public class MainActivity extends AppCompatActivity {
             public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
                 if (response.isSuccessful()) {
                         try {
-                            File tempMp3 = File.createTempFile("response", "mp3", getCacheDir());
+                            File tempMp3 = File.createTempFile("response", ".mp3", getCacheDir());
                             tempMp3.deleteOnExit();
                             FileOutputStream fos = new FileOutputStream(tempMp3);
                             InputStream is = new BufferedInputStream(response.body().byteStream());
@@ -700,6 +706,25 @@ public class MainActivity extends AppCompatActivity {
                 }
             });
         }
+    private void shareAudioFile(String filePath) {
+        try {
+            File file = new File(filePath);
+            Uri fileUri = FileProvider.getUriForFile(this, BuildConfig.APPLICATION_ID + ".provider", file);
+
+            Intent shareIntent = new Intent();
+            shareIntent.setAction(Intent.ACTION_SEND);
+            shareIntent.putExtra(Intent.EXTRA_STREAM, fileUri);
+            shareIntent.setType("audio/mp3");
+            shareIntent.addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION);
+
+            startActivity(Intent.createChooser(shareIntent, "Share audio file"));
+        } catch (Exception e) {
+            e.printStackTrace();
+            Toast.makeText(this, "Error sharing audio file", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+
     private void playAudio(String audioFilePath) {
         this.audioFilePath = audioFilePath;
             if (mediaPlayer != null) {

@@ -8,6 +8,7 @@
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
         android:textStyle="bold"
+        android:textSize="16sp"
         android:paddingLeft="8dp"
         android:paddingRight="8dp" />
 
@@ -16,6 +17,7 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:background="@drawable/rounded_edges_ch"
+        android:textSize="16sp"
         android:paddingLeft="8dp"
         android:paddingRight="8dp" />
 </RelativeLayout>
