@@ -46,15 +46,19 @@
             <EditText
                 android:id="@+id/user_input"
                 android:layout_width="0dp"
-                android:layout_height="45dp"
+                android:layout_height="40dp"
                 android:layout_weight="70"
                 android:hint="Type your message here..."
                 android:background="@drawable/rounded_edges"
-                android:inputType="textNoSuggestions"
+                android:inputType="textMultiLine"
                 android:textCursorDrawable="@drawable/no_underline"
                 android:textColor="@color/button_icon_color"
                 android:paddingLeft="8dp"
-                android:paddingRight="8dp" />
+                android:paddingRight="8dp"
+                android:scrollbars="vertical"
+                android:maxLines="2" />
+
+
             <Button
                 android:id="@+id/send_button"
                 android:layout_width="0dp"

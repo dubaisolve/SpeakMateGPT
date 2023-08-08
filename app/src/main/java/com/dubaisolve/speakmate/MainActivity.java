@@ -1,10 +1,12 @@
 package com.dubaisolve.speakmate;
 import android.Manifest;
 import android.app.ProgressDialog;
+import android.content.BroadcastReceiver;
 import android.content.ClipData;
 import android.content.ClipboardManager;
 import android.content.Context;
 import android.content.Intent;
+import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
@@ -200,6 +202,19 @@ public class MainActivity extends AppCompatActivity {
                 .build();
         return retrofit.create(TranscriptionService.class);
     }
+    private BroadcastReceiver dataUpdatedReceiver = new BroadcastReceiver() {
+        @Override
+        public void onReceive(Context context, Intent intent) {
+            SharedPreferences sharedPreferences = getSharedPreferences("API_KEYS", MODE_PRIVATE);
+            gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
+            elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
+            voiceId = sharedPreferences.getString("VOICE_ID", "");
+            model = sharedPreferences.getString("MODEL","gpt-3.5-turbo");
+            maxTokens = sharedPreferences.getString("MAX_TOKENS", "500"); // default to 500 if not set
+            n = sharedPreferences.getString("N", "1"); // default to 1 if not set
+            temperature = sharedPreferences.getString("TEMPERATURE", "0.5"); // default to 0.5 if not set
+        }
+    };
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
@@ -261,6 +276,14 @@ public class MainActivity extends AppCompatActivity {
         gpt3Service = retrofitOpenAI.create(Gpt3Service.class);
 
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_RECORD_AUDIO_PERMISSION);
+        registerReceiver(dataUpdatedReceiver, new IntentFilter("com.dubaisolve.speakmate.ACTION_DATA_UPDATED"));
+    }
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+
+        // Unregister the receiver to avoid memory leaks
+        unregisterReceiver(dataUpdatedReceiver);
     }
     private void initViews() {
         recordButton = findViewById(R.id.recordButton);
@@ -270,13 +293,13 @@ public class MainActivity extends AppCompatActivity {
     private void initListeners() {
         // Retrieve the API key and voice ID from SharedPreferences
         SharedPreferences sharedPreferences = getSharedPreferences("API_KEYS", MODE_PRIVATE);
-        String gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
-        String elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
-        String voiceId = sharedPreferences.getString("VOICE_ID", "");
-        String model = sharedPreferences.getString("MODEL","gpt-3.5-turbo");
-        String maxTokens = sharedPreferences.getString("MAX_TOKENS", "500"); // default to 500 if not set
-        String n = sharedPreferences.getString("N", "1"); // default to 1 if not set
-        String temperature = sharedPreferences.getString("TEMPERATURE", "0.5"); // default to 0.5 if not set
+        gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
+        elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
+        voiceId = sharedPreferences.getString("VOICE_ID", "");
+        model = sharedPreferences.getString("MODEL","gpt-3.5-turbo");
+        maxTokens = sharedPreferences.getString("MAX_TOKENS", "500");
+        n = sharedPreferences.getString("N", "1");
+        temperature = sharedPreferences.getString("TEMPERATURE", "0.5");
 
         // Refactor the listeners
         recordButton.setOnClickListener(new View.OnClickListener() {
@@ -384,8 +407,9 @@ public class MainActivity extends AppCompatActivity {
         }
     }
     @Override
-    protected void onResume() {
-        super.onResume();
+    protected void onRestart() {
+        super.onRestart();
+        Log.d("MainActivity", "onRestart called");
         SharedPreferences sharedPreferences = getSharedPreferences("API_KEYS", MODE_PRIVATE);
         gptApiKey = sharedPreferences.getString("GPT_API_KEY", "");
         elevenLabsApiKey = sharedPreferences.getString("ELEVEN_LABS_API_KEY", "");
@@ -394,8 +418,16 @@ public class MainActivity extends AppCompatActivity {
         maxTokens = sharedPreferences.getString("MAX_TOKENS", "500"); // default to 500 if not set
         n = sharedPreferences.getString("N", "1"); // default to 1 if not set
         temperature = sharedPreferences.getString("TEMPERATURE", "0.5"); // default to 0.5 if not set
-
+        Log.d("MainActivity", "Loaded data from SharedPreferences in onRestart:");
+        Log.d("MainActivity", "gptApiKey: " + gptApiKey);
+        Log.d("MainActivity", "elevenLabsApiKey: " + elevenLabsApiKey);
+        Log.d("MainActivity", "voiceId: " + voiceId);
+        Log.d("MainActivity", "model: " + model);
+        Log.d("MainActivity", "maxTokens: " + maxTokens);
+        Log.d("MainActivity", "n: " + n);
+        Log.d("MainActivity", "temperature: " + temperature);
     }
+
     private void startRecording() {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             recordButton = findViewById(R.id.recordButton);
@@ -613,10 +645,12 @@ public class MainActivity extends AppCompatActivity {
                         Gson gson = new Gson();
                         JsonObject responseObject = gson.fromJson(jsonResponse, JsonObject.class);
                         final String generatedText = responseObject.getAsJsonArray("choices").get(0).getAsJsonObject().getAsJsonObject("message").get("content").getAsString();
+                        final String aiResponse = generatedText.replaceFirst("AI: ", "").replaceFirst("Assistant: ", "");
+
                         runOnUiThread(new Runnable() {
                             @Override
                             public void run() {
-                                Message aiMessage = new Message("AI", generatedText);
+                                Message aiMessage = new Message("AI", aiResponse);
                                 myDataset.add(aiMessage);
                                 mAdapter.notifyItemInserted(myDataset.size() - 1);
                                 layoutManager.scrollToPosition(myDataset.size() - 1);
@@ -625,7 +659,7 @@ public class MainActivity extends AppCompatActivity {
 
                         // Call getAudioResponseFromElevenLabs if ELEVEN_LABS_API_KEY and VOICE_ID are not empty
                         if (!elevenLabsApiKey.isEmpty() && !voiceId.isEmpty()) {
-                            getAudioResponseFromElevenLabs(generatedText, elevenLabsApiKey, voiceId);
+                            getAudioResponseFromElevenLabs(aiResponse, elevenLabsApiKey, voiceId);
                         }
                     } catch (IOException e) {
                         e.printStackTrace();

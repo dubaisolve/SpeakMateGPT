@@ -88,6 +88,7 @@ public class SettingsActivity extends AppCompatActivity {
         saveButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
+                Log.d("SettingsActivity", "Save button clicked");
                 saveData();
 
                 Intent resultIntent = new Intent();
@@ -387,6 +388,7 @@ public class SettingsActivity extends AppCompatActivity {
         temperatureEditText.setText(temperature);
     }
     private void saveData() {
+        Log.d("SettingsActivity", "Saving data");
         gptApiKey = gptApiKeyEditText.getText().toString();
         elevenLabsApiKey = elevenLabsApiKeyEditText.getText().toString();
         voiceId = elevenLabsVoiceIdEditText.getText().toString();
@@ -404,7 +406,9 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putString("MAX_TOKENS", maxTokens);
         editor.putString("N", n);
         editor.putString("TEMPERATURE", temperature);
-        editor.apply();
+        editor.commit();
+        Intent intent = new Intent("com.dubaisolve.speakmate.ACTION_DATA_UPDATED");
+        sendBroadcast(intent);
     }
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {
