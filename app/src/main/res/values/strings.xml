@@ -1,4 +1,35 @@
 <resources>
     <string name="app_name">GPTMobile</string>
     <string name="settings">Settings</string>
+    <string name="title_activity_help">SpeakMate Manual</string>
+    <string name="large_text">
+        "1. Setting up APIs\n\n"
+
+        "Get your ChatGPT &amp; Eleven Labs accounts set up; they are both available in paid/free versions. Get your API keys and simply paste them into appropriate fields in the settings page (top right gear icon). Once you input your Eleven Labs Key, you will be able to sample &amp; see all voices that you have in your account.\n\n"
+
+        "2. Sample from YouTube or Any Other Player\n\n"
+
+        "You can sample voice from your YouTube player while in minimized mode view when running the app. Open YouTube, hit play video/audio, use the middle Android Button, it will minimize YouTube to half screen. Open SpeakMate, navigate to Settings (gear), sample, Record Audio (for best results, recording should be no less than 1 minute). Once finished recording, the sample will be saved in the Eleven account, which you will be able to see by navigating to settings with the Voice name you named it. To use it, simply tap and hold on VOICE_ID, then copy the ID, navigate back to settings, paste to VOICE_ID, and SAVE. All AI responses now will be followed by text to voice using your provided VOICE_ID, which you sampled previously.\n\n"
+
+        "3. Sample from File\n\n"
+
+        "If you already have an audio file you want to use for sampling voice from, just navigate to it using Settings, Sample, Upload from File, Name your voice. Then you should be able to see your voice_id in the VOICES page.\n\n"
+
+        "4. Chat GPT Settings\n\n"
+
+        "Four settings are given to the user to play with: Model, MAX_TOKENS, N, and Temperature. Please read more info on the OpenAI website for more in-depth instruction on best practices and desired outcomes for Generative AI.\n\n"
+
+        "5. Chat History\n\n"
+
+        "Chat history is not supported in this app; however, until you flush the conversation by Send Icon bottom right, Clear Chat. All requests will be sent on a loop to AI, so it will have a good idea of what you are asking the AI for, and given the settings you set up, conversations can be as long as 32k tokens, which is more than enough for ad-hoc conversation.\n\n"
+
+        "6. Use Cases\n\n"
+
+        "AI – depending on your settings, you can use it as a quick 'ask and tell me' app without having to type or read anything.\n"
+        "Tired of Narrating or typing? Use AI to generate context for you and sample your own voice or some celebrity to talk over AI. Perfect for Teachers / Trainers.\n"
+        "Translation – yes, it autodetects languages, and yes, you can ask AI to translate.\n"
+        "Taking MoM from meetings or recorded audio and then responding with your own Voice.\n"
+        "Import Audio from file (WhatsApp etc.) and generate AI response with 'prompt engineering' using chat-like app capability.\n"
+    </string>
+    <string name="action_settings">Settings</string>
 </resources>

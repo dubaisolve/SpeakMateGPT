@@ -10,12 +10,16 @@ import android.content.IntentFilter;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.ColorStateList;
+import android.database.Cursor;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
 import android.net.Uri;
 import android.os.Bundle;
 import android.os.Environment;
 import android.os.Handler;
+import android.provider.DocumentsContract;
+import android.provider.MediaStore;
+import android.provider.OpenableColumns;
 import android.util.Log;
 import android.view.ContextThemeWrapper;
 import android.view.Menu;
@@ -67,6 +71,8 @@ public class MainActivity extends AppCompatActivity {
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
     private static final long MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB
     private static final long WARNING_THRESHOLD_BYTES = (long) (MAX_FILE_SIZE_BYTES * 0.9); // 90% of 25 MB
+    private static final int REQUEST_READ_EXTERNAL_STORAGE_PERMISSION = 1001;
+
     private static String fileName = null;
     private MediaRecorder recorder = null;
     private ProgressDialog progressDialog;
@@ -93,6 +99,7 @@ public class MainActivity extends AppCompatActivity {
     private Button sendButton;
     private boolean isRecording = false;
     private PopupMenu popupMenu;
+    private static final int IMPORT_AUDIO_REQUEST_CODE = 42;
 
     // Implement a custom MediaPlayerControl
     private MediaController.MediaPlayerControl mediaPlayerControl = new MediaController.MediaPlayerControl() {
@@ -189,6 +196,33 @@ public class MainActivity extends AppCompatActivity {
 
         return retrofit.create(Gpt3Service.class);
     }
+    private void importAudioFile() {
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
+            // Permission is granted, proceed with importing the audio file
+            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
+            intent.setType("audio/*");
+            intent.addCategory(Intent.CATEGORY_OPENABLE);
+            startActivityForResult(intent, IMPORT_AUDIO_REQUEST_CODE);
+        } else {
+            // Permission is not granted, request it from the user
+            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_READ_EXTERNAL_STORAGE_PERMISSION);
+        }
+    }
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        if (requestCode == REQUEST_READ_EXTERNAL_STORAGE_PERMISSION) {
+            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
+                // Permission granted, proceed with importing the audio file
+                importAudioFile();
+            } else {
+                // Permission denied, show a message to the user
+                Toast.makeText(this, "Storage permission is required to import audio files", Toast.LENGTH_SHORT).show();
+            }
+        }
+    }
+
+
     private void updateRecordButtonIconColor(@ColorRes int colorResId) {
         int color = ContextCompat.getColor(this, colorResId);
         ColorStateList colorStateList = ColorStateList.valueOf(color);
@@ -316,7 +350,6 @@ public class MainActivity extends AppCompatActivity {
             }
         });
 
-
         sendButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
@@ -338,6 +371,9 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public boolean onMenuItemClick(MenuItem item) {
                             switch (item.getItemId()) {
+                                case R.id.import_audio_button:
+                                    importAudioFile();
+                                    return true;
                                 case R.id.save_audio_button:
                                     shareAudioFile(audioFilePath);
                                     return true;
@@ -388,9 +424,14 @@ public class MainActivity extends AppCompatActivity {
             Intent settingsIntent = new Intent(MainActivity.this, SettingsActivity.class);
             startActivityForResult(settingsIntent, SETTINGS_REQUEST_CODE);
             return true;
+        } else if (item.getItemId() == R.id.action_help) {
+            Intent helpIntent = new Intent(MainActivity.this, HelpActivity.class);
+            startActivity(helpIntent);
+            return true;
         }
         return super.onOptionsItemSelected(item);
     }
+
     @Override
     protected void onActivityResult(int requestCode, int resultCode, @Nullable Intent data) {
         super.onActivityResult(requestCode, resultCode, data);
@@ -404,8 +445,64 @@ public class MainActivity extends AppCompatActivity {
             n = data.getStringExtra("N");
             temperature = data.getStringExtra("TEMPERATURE");
             updateListeners();
+        } else if (requestCode == IMPORT_AUDIO_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+            Uri audioUri = data.getData();
+            if (audioUri != null) {
+                String filePath = getFilePathFromUri(this, audioUri); // Use the new method to get the file path
+                if (filePath != null) {
+                    // Update the fileName variable with the path of the imported file
+                    this.fileName = filePath;
+                    // Call your existing transcribeAudio method
+                    transcribeAudio(gptApiKey);
+                } else {
+                    Toast.makeText(this, "Failed to import audio file", Toast.LENGTH_SHORT).show();
+                }
+            }
         }
     }
+
+    private String getFilePathFromUri(Context context, Uri uri) {
+        if (DocumentsContract.isDocumentUri(context, uri)) {
+            String documentId = DocumentsContract.getDocumentId(uri);
+            String[] parts = new String[0];
+            if ("com.android.externalstorage.documents".equals(uri.getAuthority())) {
+                parts = documentId.split(":");
+                if ("primary".equalsIgnoreCase(parts[0])) {
+                    return Environment.getExternalStorageDirectory() + "/" + parts[1];
+                }
+            } else if ("com.android.providers.media.documents".equals(uri.getAuthority())) {
+                Uri contentUri = MediaStore.Audio.Media.EXTERNAL_CONTENT_URI;
+                String selection = "_id=?";
+                String[] selectionArgs = new String[]{parts[1]};
+
+                return getDataColumn(context, contentUri, selection, selectionArgs);
+            }
+        } else if ("content".equalsIgnoreCase(uri.getScheme())) {
+            return getDataColumn(context, uri, null, null);
+        } else if ("file".equalsIgnoreCase(uri.getScheme())) {
+            return uri.getPath();
+        }
+        return null;
+    }
+
+    private String getDataColumn(Context context, Uri uri, String selection, String[] selectionArgs) {
+        Cursor cursor = null;
+        String[] projection = {MediaStore.Audio.Media.DATA};
+
+        try {
+            cursor = context.getContentResolver().query(uri, projection, selection, selectionArgs, null);
+            if (cursor != null && cursor.moveToFirst()) {
+                int columnIndex = cursor.getColumnIndexOrThrow(projection[0]);
+                return cursor.getString(columnIndex);
+            }
+        } finally {
+            if (cursor != null) {
+                cursor.close();
+            }
+        }
+        return null;
+    }
+
     @Override
     protected void onRestart() {
         super.onRestart();
@@ -468,8 +565,6 @@ public class MainActivity extends AppCompatActivity {
                 Toast.makeText(this, "Recording too long. Please keep the recording under 25 MB.", Toast.LENGTH_LONG).show();
                 // Delete the oversized recording.
                 audioFile.delete();
-            } else {
-                Toast.makeText(this, "Recording stopped. File saved at: " + audioFile.getAbsolutePath(), Toast.LENGTH_LONG).show();
             }
         }
     }
@@ -677,7 +772,7 @@ public class MainActivity extends AppCompatActivity {
                     runOnUiThread(new Runnable() {
                         @Override
                         public void run() {
-                            Toast.makeText(MainActivity.this, "Failed to get a response from GPT-3.5 Turbo: " + errorMessage, Toast.LENGTH_SHORT).show();
+                            Toast.makeText(MainActivity.this, "Failed to get a response from AI: " + errorMessage, Toast.LENGTH_SHORT).show();
                         }
                     });
                 }
