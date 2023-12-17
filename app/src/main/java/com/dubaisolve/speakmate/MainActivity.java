@@ -197,17 +197,12 @@ public class MainActivity extends AppCompatActivity {
         return retrofit.create(Gpt3Service.class);
     }
     private void importAudioFile() {
-        if (ContextCompat.checkSelfPermission(this, Manifest.permission.READ_EXTERNAL_STORAGE) == PackageManager.PERMISSION_GRANTED) {
-            // Permission is granted, proceed with importing the audio file
-            Intent intent = new Intent(Intent.ACTION_GET_CONTENT);
-            intent.setType("audio/*");
-            intent.addCategory(Intent.CATEGORY_OPENABLE);
-            startActivityForResult(intent, IMPORT_AUDIO_REQUEST_CODE);
-        } else {
-            // Permission is not granted, request it from the user
-            ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_READ_EXTERNAL_STORAGE_PERMISSION);
-        }
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("audio/*");
+        startActivityForResult(intent, IMPORT_AUDIO_REQUEST_CODE);
     }
+
     @Override
     public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
@@ -448,15 +443,10 @@ public class MainActivity extends AppCompatActivity {
         } else if (requestCode == IMPORT_AUDIO_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
             Uri audioUri = data.getData();
             if (audioUri != null) {
-                String filePath = getFilePathFromUri(this, audioUri); // Use the new method to get the file path
-                if (filePath != null) {
-                    // Update the fileName variable with the path of the imported file
-                    this.fileName = filePath;
-                    // Call your existing transcribeAudio method
-                    transcribeAudio(gptApiKey);
-                } else {
-                    Toast.makeText(this, "Failed to import audio file", Toast.LENGTH_SHORT).show();
-                }
+                // Call a modified transcribeAudio method that can handle a URI
+                transcribeAudioWithUri(audioUri, gptApiKey);
+            } else {
+                Toast.makeText(this, "Failed to import audio file", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -567,6 +557,94 @@ public class MainActivity extends AppCompatActivity {
                 audioFile.delete();
             }
         }
+    }
+    private void transcribeAudioWithUri(Uri audioUri, String gptApiKey) {
+        progressDialog = new ProgressDialog(this);
+        progressDialog.setMessage("Transcribing audio...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+
+        try {
+            File tempFile = createTempFileFromUri(audioUri);
+            RequestBody requestFile = RequestBody.create(tempFile, MediaType.parse("audio/mpeg"));
+            String model = "whisper-1";
+            MultipartBody.Part body = MultipartBody.Part.createFormData("file", tempFile.getName(), requestFile);
+            RequestBody modelPart = RequestBody.create(model, MediaType.parse("text/plain"));
+
+            transcriptionService.transcribeAudio("Bearer " + gptApiKey, modelPart, body).enqueue(new Callback<ResponseBody>() {
+                @Override
+                public void onResponse(@NonNull Call<ResponseBody> call, @NonNull Response<ResponseBody> response) {
+                    progressDialog.dismiss();
+                    if (response.isSuccessful()) {
+                        try {
+                            String jsonResponse = response.body().string();
+                            Log.d("TranscriptionResponse", jsonResponse);
+                            Gson gson = new Gson();
+                            JsonObject jsonObject = gson.fromJson(jsonResponse, JsonObject.class);
+                            final String transcription = jsonObject.get("text").getAsString();
+                            runOnUiThread(new Runnable() {
+                                @Override
+                                public void run() {
+                                    Message aiMessage = new Message("User", transcription);
+                                    myDataset.add(aiMessage);
+                                    mAdapter.notifyItemInserted(myDataset.size() - 1);
+                                    layoutManager.scrollToPosition(myDataset.size() - 1);
+                                }
+                            });
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    } else {
+                        try {
+                            String errorBody = response.errorBody().string();
+                            Log.e("TranscriptionError", "Error response body: " + errorBody);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                        Log.e("TranscriptionError", "Unsuccessful response: " + response.code());
+                        runOnUiThread(new Runnable() {
+                            @Override
+                            public void run() {
+                                Toast.makeText(MainActivity.this, "Failed to transcribe the audio", Toast.LENGTH_SHORT).show();
+                            }
+                        });
+                    }
+
+                }
+                @Override
+                public void onFailure(@NonNull Call<ResponseBody> call, @NonNull Throwable t) {
+                    progressDialog.dismiss();
+                    Log.e("TranscriptionError", "Request failed: ", t);
+                    runOnUiThread(new Runnable() {
+                        @Override
+                        public void run() {
+                            Toast.makeText(MainActivity.this, "Failed to transcribe the audio", Toast.LENGTH_SHORT).show();
+                        }
+                    });
+                }
+            });
+        } catch (IOException e) {
+            progressDialog.dismiss();
+            e.printStackTrace();
+            Toast.makeText(this, "Failed to process the audio file", Toast.LENGTH_SHORT).show();
+        }
+    }
+
+    private File createTempFileFromUri(Uri uri) throws IOException {
+        InputStream inputStream = getContentResolver().openInputStream(uri);
+        File tempFile = File.createTempFile("audio", ".m4a", getCacheDir());
+        tempFile.deleteOnExit();
+        FileOutputStream out = new FileOutputStream(tempFile);
+        if (inputStream != null) {
+            byte[] buffer = new byte[4 * 1024];
+            int read;
+            while ((read = inputStream.read(buffer)) != -1) {
+                out.write(buffer, 0, read);
+            }
+            inputStream.close();
+        }
+        out.close();
+        return tempFile;
     }
     private void transcribeAudio(String gptApiKey) {
         progressDialog = new ProgressDialog(this);
@@ -800,9 +878,10 @@ public class MainActivity extends AppCompatActivity {
     private void getAudioResponseFromElevenLabs(String text, String elevenLabsApiKey, String voiceId) {
         JsonObject jsonObject = new JsonObject();
         jsonObject.addProperty("text", text);
+        jsonObject.addProperty("model_id", "eleven_multilingual_v2");
         JsonObject voiceSettings = new JsonObject();
-        voiceSettings.addProperty("stability", 0);
-        voiceSettings.addProperty("similarity_boost", 0);
+        voiceSettings.addProperty("stability", 0.71);
+        voiceSettings.addProperty("similarity_boost", 0.5);
         jsonObject.add("voice_settings", voiceSettings);
         elevenLabsService.textToSpeech(voiceId, elevenLabsApiKey, RequestBody.create(jsonObject.toString(), MediaType.parse("application/json"))).enqueue(new Callback<ResponseBody>() {
             @Override
