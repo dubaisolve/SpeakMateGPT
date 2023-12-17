@@ -20,6 +20,7 @@ import android.os.Handler;
 import android.provider.DocumentsContract;
 import android.provider.MediaStore;
 import android.provider.OpenableColumns;
+import android.util.Base64;
 import android.util.Log;
 import android.view.ContextThemeWrapper;
 import android.view.Menu;
@@ -35,6 +36,7 @@ import android.widget.Toast;
 import androidx.annotation.ColorRes;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
+import androidx.appcompat.app.AlertDialog;
 import androidx.appcompat.app.AppCompatActivity;
 import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
@@ -60,12 +62,16 @@ import okhttp3.MultipartBody;
 import okhttp3.OkHttpClient;
 import okhttp3.RequestBody;
 import okhttp3.ResponseBody;
+import okhttp3.OkHttpClient;
+import okhttp3.logging.HttpLoggingInterceptor;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.HttpException;
 import retrofit2.Response;
 import retrofit2.Retrofit;
 import retrofit2.converter.gson.GsonConverterFactory;
+import org.apache.commons.io.IOUtils;
+import com.google.gson.JsonElement;
 public class MainActivity extends AppCompatActivity {
     private static final int SETTINGS_REQUEST_CODE = 1;
     private static final int REQUEST_RECORD_AUDIO_PERMISSION = 200;
@@ -100,6 +106,7 @@ public class MainActivity extends AppCompatActivity {
     private boolean isRecording = false;
     private PopupMenu popupMenu;
     private static final int IMPORT_AUDIO_REQUEST_CODE = 42;
+    private static final int IMPORT_IMAGE_REQUEST_CODE = 43;
 
     // Implement a custom MediaPlayerControl
     private MediaController.MediaPlayerControl mediaPlayerControl = new MediaController.MediaPlayerControl() {
@@ -181,6 +188,7 @@ public class MainActivity extends AppCompatActivity {
     }
     private Gpt3Service gpt3Service;
     private ElevenLabsService elevenLabsService;
+    private Gpt4VisionService gpt4VisionService;
     private Gpt3Service createGpt3Service() {
         OkHttpClient client = new OkHttpClient.Builder()
                 .connectTimeout(60, TimeUnit.SECONDS) // connect timeout
@@ -201,6 +209,13 @@ public class MainActivity extends AppCompatActivity {
         intent.addCategory(Intent.CATEGORY_OPENABLE);
         intent.setType("audio/*");
         startActivityForResult(intent, IMPORT_AUDIO_REQUEST_CODE);
+    }
+    private void importImages() {
+        Intent intent = new Intent(Intent.ACTION_OPEN_DOCUMENT);
+        intent.addCategory(Intent.CATEGORY_OPENABLE);
+        intent.setType("image/*");
+        intent.putExtra(Intent.EXTRA_ALLOW_MULTIPLE, true);
+        startActivityForResult(intent, IMPORT_IMAGE_REQUEST_CODE);
     }
 
     @Override
@@ -283,6 +298,9 @@ public class MainActivity extends AppCompatActivity {
                 .writeTimeout(60, TimeUnit.SECONDS) // write timeout
                 .readTimeout(90, TimeUnit.SECONDS) // read timeout
                 .build();
+        HttpLoggingInterceptor logging = new HttpLoggingInterceptor();
+        logging.setLevel(HttpLoggingInterceptor.Level.BODY);
+
 
         Retrofit retrofitElevenLabs = new Retrofit.Builder()
                 .baseUrl("https://api.elevenlabs.io/")
@@ -303,6 +321,14 @@ public class MainActivity extends AppCompatActivity {
                 .client(client)
                 .build();
         gpt3Service = retrofitOpenAI.create(Gpt3Service.class);
+
+        Retrofit retrofitGpt4Vision = new Retrofit.Builder()
+                .baseUrl("https://api.openai.com/v1/")
+                .addConverterFactory(GsonConverterFactory.create())
+                .client(client)
+                .build();
+        gpt4VisionService = retrofitGpt4Vision.create(Gpt4VisionService.class);
+
 
         ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO, Manifest.permission.WRITE_EXTERNAL_STORAGE, Manifest.permission.READ_EXTERNAL_STORAGE}, REQUEST_RECORD_AUDIO_PERMISSION);
         registerReceiver(dataUpdatedReceiver, new IntentFilter("com.dubaisolve.speakmate.ACTION_DATA_UPDATED"));
@@ -366,6 +392,9 @@ public class MainActivity extends AppCompatActivity {
                         @Override
                         public boolean onMenuItemClick(MenuItem item) {
                             switch (item.getItemId()) {
+                                case R.id.import_image_button:
+                                    importImages();
+                                    return true;
                                 case R.id.import_audio_button:
                                     importAudioFile();
                                     return true;
@@ -447,6 +476,17 @@ public class MainActivity extends AppCompatActivity {
                 transcribeAudioWithUri(audioUri, gptApiKey);
             } else {
                 Toast.makeText(this, "Failed to import audio file", Toast.LENGTH_SHORT).show();
+            }
+        }
+        else if (requestCode == IMPORT_IMAGE_REQUEST_CODE && resultCode == RESULT_OK && data != null) {
+            if (data.getClipData() != null) {
+                // Multiple images selected
+                sendImages(data.getClipData(), null, gptApiKey);
+            } else if (data.getData() != null) {
+                // Single image selected
+                sendImages(null, data.getData(), gptApiKey);
+            } else {
+                Toast.makeText(this, "Failed to import images", Toast.LENGTH_SHORT).show();
             }
         }
     }
@@ -646,6 +686,144 @@ public class MainActivity extends AppCompatActivity {
         out.close();
         return tempFile;
     }
+    private void sendImages(ClipData clipData, Uri singleImageUri, String gptApiKey) {
+        JsonArray messagesArray = new JsonArray();
+        JsonObject textMessage = new JsonObject();
+        textMessage.addProperty("type", "text");
+        String promptText = (clipData != null && clipData.getItemCount() > 1) ?
+                "Describe these images and compare them, if you find any logical relevance between them then provide a short explanation if not just describe them listing 1 by 1." :
+                "Describe what is in the picture, if you find a question (text) in the picture then try to answer it based on what you have captured in this picture in this case don't describe your reasoning just provide a short answer";
+        textMessage.addProperty("text", promptText);
+        messagesArray.add(textMessage);
+
+        if (clipData != null) {
+            // Multiple images selected
+            for (int i = 0; i < clipData.getItemCount(); i++) {
+                Uri imageUri = clipData.getItemAt(i).getUri();
+                addImageToMessagesArray(imageUri, messagesArray);
+            }
+        } else if (singleImageUri != null) {
+            // Single image selected
+            addImageToMessagesArray(singleImageUri, messagesArray);
+        }
+
+        SharedPreferences sharedPreferences = getSharedPreferences("API_KEYS", MODE_PRIVATE);
+        String maxTokens = sharedPreferences.getString("MAX_TOKENS", "500");
+
+        sendGpt4VisionRequest(messagesArray, gptApiKey, maxTokens);
+    }
+
+    private void addImageToMessagesArray(Uri imageUri, JsonArray messagesArray) {
+        String base64Image = encodeImageToBase64(imageUri);
+        if (!base64Image.isEmpty()) {
+            JsonObject imageMessage = new JsonObject();
+            imageMessage.addProperty("type", "image_url");
+            JsonObject imageUrlObject = new JsonObject();
+            imageUrlObject.addProperty("url", "data:image/jpeg;base64," + base64Image);
+            imageUrlObject.addProperty("detail", "high"); // Added detail for high-quality analysis
+            imageMessage.add("image_url", imageUrlObject);
+            messagesArray.add(imageMessage);
+        }
+    }
+
+    private String encodeImageToBase64(Uri imageUri) {
+        try (InputStream inputStream = getContentResolver().openInputStream(imageUri)) {
+            byte[] bytes = IOUtils.toByteArray(inputStream);
+            return Base64.encodeToString(bytes, Base64.DEFAULT);
+        } catch (IOException e) {
+            e.printStackTrace();
+            return "";
+        }
+    }
+
+    private void sendGpt4VisionRequest(JsonArray messagesArray, String gptApiKey, String maxTokens) {
+        progressDialog = new ProgressDialog(this);
+        progressDialog.setMessage("Analyzing images...");
+        progressDialog.setCancelable(false);
+        progressDialog.show();
+
+        JsonObject requestBody = new JsonObject();
+        requestBody.addProperty("model", "gpt-4-vision-preview");
+        JsonArray newMessagesArray = new JsonArray();
+        JsonObject messageObject = new JsonObject();
+        messageObject.addProperty("role", "user");
+        messageObject.add("content", messagesArray);
+        newMessagesArray.add(messageObject);
+
+        requestBody.add("messages", newMessagesArray);
+        try {
+            requestBody.addProperty("max_tokens", Integer.parseInt(maxTokens));
+        } catch (NumberFormatException e) {
+            requestBody.addProperty("max_tokens", 500); // Fallback to default if parsing fails
+        }
+
+        RequestBody body = RequestBody.create(requestBody.toString(), MediaType.parse("application/json"));
+
+        gpt4VisionService.chatCompletion("Bearer " + gptApiKey, body).enqueue(new Callback<ResponseBody>() {
+            @Override
+            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                progressDialog.dismiss();
+                if (response.isSuccessful()) {
+                    try {
+                        String jsonResponse = response.body().string();
+                        Log.d("Gpt4VisionResponse", jsonResponse);
+                        Gson gson = new Gson();
+                        JsonObject responseObject = gson.fromJson(jsonResponse, JsonObject.class);
+                        final String analysisResult = responseObject.getAsJsonArray("choices").get(0)
+                                .getAsJsonObject().get("message").getAsJsonObject().get("content").getAsString();
+                        runOnUiThread(() -> {
+                            Message aiMessage = new Message("AI", analysisResult);
+                            myDataset.add(aiMessage);
+                            mAdapter.notifyItemInserted(myDataset.size() - 1);
+                            layoutManager.scrollToPosition(myDataset.size() - 1);
+                        });
+                    } catch (IOException e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    handleErrorResponse(response);
+                }
+            }
+
+            @Override
+            public void onFailure(Call<ResponseBody> call, Throwable t) {
+                progressDialog.dismiss();
+                Log.e("Gpt4VisionError", "Request failed: ", t);
+                runOnUiThread(() -> Toast.makeText(MainActivity.this, "Failed to analyze the images", Toast.LENGTH_SHORT).show());
+            }
+        });
+    }
+
+    private void handleErrorResponse(Response<ResponseBody> response) {
+        String errorMessage = "Failed to analyze the images"; // Default error message
+        try {
+            String errorBody = response.errorBody().string();
+            Log.e("Gpt4VisionError", "Error response body: " + errorBody);
+
+            Gson gson = new Gson();
+            JsonObject errorResponse = gson.fromJson(errorBody, JsonObject.class);
+            JsonObject errorObject = errorResponse.getAsJsonObject("error");
+            if (errorObject != null && errorObject.has("message")) {
+                errorMessage = errorObject.get("message").getAsString();
+            }
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+
+        Log.e("Gpt4VisionError", "Unsuccessful response: " + response.code());
+        final String finalErrorMessage = errorMessage;
+        runOnUiThread(() -> showErrorMessageDialog(finalErrorMessage));
+    }
+
+    private void showErrorMessageDialog(String message) {
+        new AlertDialog.Builder(this)
+                .setTitle("Error")
+                .setMessage(message)
+                .setPositiveButton(android.R.string.ok, null)
+                .setIcon(android.R.drawable.ic_dialog_alert)
+                .show();
+    }
+
     private void transcribeAudio(String gptApiKey) {
         progressDialog = new ProgressDialog(this);
         progressDialog.setMessage("Transcribing audio...");
