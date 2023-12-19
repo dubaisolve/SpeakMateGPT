@@ -687,12 +687,13 @@ public class MainActivity extends AppCompatActivity {
         return tempFile;
     }
     private void sendImages(ClipData clipData, Uri singleImageUri, String gptApiKey) {
+        messagesArray = new JsonArray(); // Clear the array
         JsonArray messagesArray = new JsonArray();
         JsonObject textMessage = new JsonObject();
         textMessage.addProperty("type", "text");
         String promptText = (clipData != null && clipData.getItemCount() > 1) ?
-                "Describe these images and compare them, if you find any logical relevance between them then provide a short explanation if not just describe them listing 1 by 1." :
-                "Describe what is in the picture, if you find a question (text) in the picture then try to answer it based on what you have captured in this picture in this case don't describe your reasoning just provide a short answer";
+                "extract all text from these images " :
+                "extract all text from image";
         textMessage.addProperty("text", promptText);
         messagesArray.add(textMessage);
 
@@ -700,6 +701,7 @@ public class MainActivity extends AppCompatActivity {
             // Multiple images selected
             for (int i = 0; i < clipData.getItemCount(); i++) {
                 Uri imageUri = clipData.getItemAt(i).getUri();
+                Log.d("ImageProcessing", "Processing URI: " + imageUri.toString()); // Log the URI
                 addImageToMessagesArray(imageUri, messagesArray);
             }
         } else if (singleImageUri != null) {
@@ -725,17 +727,17 @@ public class MainActivity extends AppCompatActivity {
             messagesArray.add(imageMessage);
         }
     }
-
     private String encodeImageToBase64(Uri imageUri) {
         try (InputStream inputStream = getContentResolver().openInputStream(imageUri)) {
             byte[] bytes = IOUtils.toByteArray(inputStream);
-            return Base64.encodeToString(bytes, Base64.DEFAULT);
+            String base64Image = Base64.encodeToString(bytes, Base64.DEFAULT);
+            Log.d("ImageProcessing", "Base64 Length: " + base64Image.length()); // Log the length of the encoded string
+            return base64Image;
         } catch (IOException e) {
             e.printStackTrace();
             return "";
         }
     }
-
     private void sendGpt4VisionRequest(JsonArray messagesArray, String gptApiKey, String maxTokens) {
         progressDialog = new ProgressDialog(this);
         progressDialog.setMessage("Analyzing images...");
@@ -769,14 +771,16 @@ public class MainActivity extends AppCompatActivity {
                         Log.d("Gpt4VisionResponse", jsonResponse);
                         Gson gson = new Gson();
                         JsonObject responseObject = gson.fromJson(jsonResponse, JsonObject.class);
-                        final String analysisResult = responseObject.getAsJsonArray("choices").get(0)
+                        final String imageAnalysisResult = responseObject.getAsJsonArray("choices").get(0)
                                 .getAsJsonObject().get("message").getAsJsonObject().get("content").getAsString();
-                        runOnUiThread(() -> {
-                            Message aiMessage = new Message("AI", analysisResult);
-                            myDataset.add(aiMessage);
-                            mAdapter.notifyItemInserted(myDataset.size() - 1);
-                            layoutManager.scrollToPosition(myDataset.size() - 1);
-                        });
+                        Log.d("ImageAnalysisResult", imageAnalysisResult);
+                        // Construct the new prompt for GPT-3
+                        String newPromptForGpt3 = imageAnalysisResult + "Ignore everything apart from the question/s. Answer the question/s by providing Question number and option or logical sequence like: Q1 - 2 or Q1 - 1,3,5 keep it short";
+                        Log.d("NewPromptForGpt3", newPromptForGpt3);
+
+                        // Call sendTextToGpt3 with the new prompt
+                        sendTextToGpt3(newPromptForGpt3, gptApiKey, elevenLabsApiKey, voiceId, model, maxTokens, n, temperature);
+
                     } catch (IOException e) {
                         e.printStackTrace();
                     }
@@ -983,8 +987,9 @@ public class MainActivity extends AppCompatActivity {
         try {
             jsonObject.addProperty("temperature", Double.parseDouble(temperature));
         } catch (NumberFormatException e) {
-            jsonObject.addProperty("temperature", 0.5); // Default value
+            jsonObject.addProperty("temperature", 0.1); // Default value
         }
+        Log.d("Gpt3RequestBody", jsonObject.toString());
         gpt3Service.chatCompletion("Bearer " + gptApiKey, RequestBody.create(jsonObject.toString(), MediaType.parse("application/json"))).enqueue(new Callback<ResponseBody>() {
             @Override
             public void onResponse(@NonNull Call<ResponseBody> call, @NonNull Response<ResponseBody> response) {
