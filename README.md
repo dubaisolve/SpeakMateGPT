@@ -3,6 +3,9 @@
 ## Overview
 Introducing SpeakMate, the innovative voice companion app that revolutionizes communication. Leveraging the advanced GPT-3.5, 4 Turbo AI technology, SpeakMate offers a seamless blend of speech-to-text transcription, AI-powered response generation, text-to-speech synthesis, speech translation, and more. With its latest features, including image analysis, OCR capabilities, and customizable voice responses, SpeakMate is not just an app but a comprehensive communication tool.
 
+DEMO - 
+https://www.youtube.com/watch?v=OTF1lkaNKsM&t=58s
+
 ## Features
 
 ### Speech-to-Text Transcription
