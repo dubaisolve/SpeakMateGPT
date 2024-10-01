@@ -26,7 +26,7 @@ public interface ElevenLabsService {
     Call<ResponseBody> addVoice(
             @Header("xi-api-key") String apiKey,
             @Part("name") RequestBody name,
-            @Part MultipartBody.Part file);
+            @Part MultipartBody.Part files);
     @GET("v1/voices")
     Call<SettingsActivity.VoicesResponse> getVoices(@Header("xi-api-key") String apiKey);
 }

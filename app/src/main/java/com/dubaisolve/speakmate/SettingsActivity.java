@@ -88,22 +88,12 @@ public class SettingsActivity extends AppCompatActivity {
         saveButton.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View v) {
-                Log.d("SettingsActivity", "Save button clicked");
                 saveData();
-
-                Intent resultIntent = new Intent();
-                resultIntent.putExtra("GPT_API_KEY", gptApiKey);
-                resultIntent.putExtra("ELEVEN_LABS_API_KEY", elevenLabsApiKey);
-                resultIntent.putExtra("VOICE_ID", voiceId);
-                resultIntent.putExtra("MODEL", model);
-                resultIntent.putExtra("MAX_TOKENS", maxTokens);
-                resultIntent.putExtra("N", n);
-                resultIntent.putExtra("TEMPERATURE", temperature);
-
-                setResult(RESULT_OK, resultIntent);
+                // Finish SettingsActivity and return to MainActivity
                 finish();
             }
         });
+
         // Find the "Sample Voice" button
         Button sampleVoiceButton = findViewById(R.id.sample_voice_button);
 
@@ -240,7 +230,14 @@ public class SettingsActivity extends AppCompatActivity {
             Cursor cursor = getContentResolver().query(uri, null, null, null, null);
             try {
                 if (cursor != null && cursor.moveToFirst()) {
-                    result = cursor.getString(cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME));
+                    int nameIndex = cursor.getColumnIndex(OpenableColumns.DISPLAY_NAME);
+                    if (nameIndex != -1) {
+                        result = cursor.getString(nameIndex);
+                    } else {
+                        // Handle the case where the column doesn't exist
+                        // You can set a default value or handle it as per your requirement
+                        result = "unknown_filename";
+                    }
                 }
             } finally {
                 if (cursor != null) {
@@ -248,7 +245,7 @@ public class SettingsActivity extends AppCompatActivity {
                 }
             }
         }
-        if (result == null) {
+        if (result == null || result.isEmpty()) {
             result = uri.getPath();
             int cut = result.lastIndexOf('/');
             if (cut != -1) {
@@ -257,6 +254,7 @@ public class SettingsActivity extends AppCompatActivity {
         }
         return result;
     }
+
     private byte[] readBytes(InputStream inputStream) throws IOException {
         ByteArrayOutputStream byteBuffer = new ByteArrayOutputStream();
         int bufferSize = 1024;
@@ -306,35 +304,47 @@ public class SettingsActivity extends AppCompatActivity {
                 throw new FileNotFoundException("Could not open input stream for " + audioFileUri);
             }
 
-            MediaType mediaType = MediaType.parse("audio/mpeg");
             byte[] bytes = readBytes(inputStream);
+
+            // Create RequestBody for the file
+            MediaType mediaType = MediaType.parse("audio/mpeg");
             RequestBody fileBody = RequestBody.create(bytes, mediaType);
+
+            // Get the file name
             String fileName = getFileName(audioFileUri);
+
+            // Create MultipartBody.Part for the file
             MultipartBody.Part filePart = MultipartBody.Part.createFormData("files", fileName, fileBody);
+
+            // Create RequestBody for the name
             RequestBody namePart = RequestBody.create(voiceName, MediaType.parse("text/plain"));
 
+            // Call the API without the "Bearer " prefix
             elevenLabsService.addVoice(elevenLabsApiKey, namePart, filePart).enqueue(new Callback<ResponseBody>() {
+                @Override
+                public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
+                    if (response.isSuccessful()) {
+                        // Handle success response
+                        Toast.makeText(SettingsActivity.this, "Voice sample uploaded successfully!", Toast.LENGTH_SHORT).show();
+                    } else {
+                        // Handle error response
+                        String errorMessage = "Error: " + response.code() + " " + response.message();
+                        Toast.makeText(SettingsActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
+                        try {
+                            String errorBody = response.errorBody().string();
+                            Log.e("ElevenLabsError", "Error body: " + errorBody);
+                        } catch (IOException e) {
+                            e.printStackTrace();
+                        }
+                    }
+                }
 
                 @Override
-            public void onResponse(Call<ResponseBody> call, Response<ResponseBody> response) {
-                if (response.isSuccessful()) {
-                    // Handle success response
-                    // You can get the voice_id from the response if needed
-                    // Show a success message or do whatever you need to do
-                    Toast.makeText(SettingsActivity.this, "Voice sample uploaded successfully!", Toast.LENGTH_SHORT).show();
-                } else {
-                    // Handle error response
-                    // You can get more details about the error
-                    String errorMessage = "Error: " + response.code() + " " + response.message();
+                public void onFailure(Call<ResponseBody> call, Throwable t) {
+                    // Handle failure
+                    String errorMessage = "Request failed: " + t.getMessage();
                     Toast.makeText(SettingsActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
-                }
-            }
-            @Override
-            public void onFailure(Call<ResponseBody> call, Throwable t) {
-                // Handle failure
-                String errorMessage = "Request failed: " + t.getMessage();
-                Toast.makeText(SettingsActivity.this, errorMessage, Toast.LENGTH_SHORT).show();
-                Log.e("API_ERROR", errorMessage, t);
+                    Log.e("API_ERROR", errorMessage, t);
                 }
             });
         } catch (Exception e) {
@@ -343,6 +353,7 @@ public class SettingsActivity extends AppCompatActivity {
             Log.e("FILE_ERROR", errorMessage, e);
         }
     }
+
     // Method to prompt the user to enter a name for the voice sample
     private void promptForVoiceName(final Uri audioFileUri) {
         AlertDialog.Builder builder = new AlertDialog.Builder(this);
@@ -407,8 +418,6 @@ public class SettingsActivity extends AppCompatActivity {
         editor.putString("N", n);
         editor.putString("TEMPERATURE", temperature);
         editor.commit();
-        Intent intent = new Intent("com.dubaisolve.speakmate.ACTION_DATA_UPDATED");
-        sendBroadcast(intent);
     }
     @Override
     public boolean onOptionsItemSelected(MenuItem item) {

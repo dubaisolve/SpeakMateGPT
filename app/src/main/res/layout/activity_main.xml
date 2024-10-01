@@ -6,13 +6,18 @@
     xmlns:tools="http://schemas.android.com/tools"
     tools:context=".MainActivity">
 
-    <ImageView android:layout_width="match_parent" android:layout_height="match_parent"
-        android:src="?attr/app_backgroundImage" android:scaleType="centerCrop" />
+    <ImageView
+        android:layout_width="match_parent"
+        android:layout_height="match_parent"
+        android:src="?attr/app_backgroundImage"
+        android:scaleType="centerCrop"
+        android:contentDescription="@null" />
 
     <androidx.constraintlayout.widget.ConstraintLayout
         android:layout_width="match_parent"
         android:layout_height="match_parent"
         android:padding="5dp">
+
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/message_list"
             android:layout_width="match_parent"
@@ -27,50 +32,111 @@
             android:layout_height="wrap_content"
             android:layout_marginBottom="5dp"
             android:orientation="horizontal"
-            android:weightSum="100"
+            android:gravity="center_vertical"
             app:layout_constraintBottom_toBottomOf="parent">
 
+            <!-- Import Image Button -->
             <com.google.android.material.button.MaterialButton
-                android:id="@+id/recordButton"
-                android:layout_width="0dp"
-                android:layout_weight="15"
-                android:layout_height="50dp"
+                android:id="@+id/import_image_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:layout_marginEnd="4dp"
                 android:background="@drawable/round_button"
-                app:icon="@drawable/record_button"
+                android:backgroundTint="@android:color/transparent"
+                app:icon="@drawable/copy_button"
                 app:iconGravity="textStart"
                 app:iconPadding="0dp"
                 app:iconSize="20dp"
-                app:iconTint="@color/button_icon_color" />
+                app:iconTint="@color/button_icon_color"
+                android:contentDescription="@string/import_image" />
 
-            <EditText
-                android:id="@+id/user_input"
-                android:layout_width="0dp"
+            <!-- Import Audio Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/import_audio_button"
+                android:layout_width="40dp"
                 android:layout_height="40dp"
-                android:layout_weight="70"
-                android:hint="Type your message here..."
-                android:background="@drawable/rounded_edges"
-                android:inputType="textMultiLine"
-                android:textCursorDrawable="@drawable/no_underline"
-                android:textColor="@color/button_icon_color"
-                android:paddingLeft="8dp"
-                android:paddingRight="8dp"
-                android:scrollbars="vertical"
-                android:maxLines="2" />
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/round_button"
+                android:backgroundTint="@android:color/transparent"
+                app:icon="@drawable/transcribe_button"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconSize="20dp"
+                app:iconTint="@color/button_icon_color"
+                android:contentDescription="@string/import_audio" />
 
+            <!-- Back Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/back_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
+                android:layout_marginEnd="4dp"
+                android:background="@drawable/round_button"
+                android:backgroundTint="@android:color/transparent"
+                app:icon="@drawable/flush_button"
+                app:iconGravity="textStart"
+                app:iconPadding="0dp"
+                app:iconSize="20dp"
+                app:iconTint="@color/button_icon_color"
+                android:visibility="gone"
+                android:contentDescription="@string/back_button" />
 
-            <Button
-                android:id="@+id/send_button"
+            <!-- Input Text with Record Button Inside -->
+            <FrameLayout
                 android:layout_width="0dp"
-                android:layout_weight="15"
-                android:layout_height="50dp"
+                android:layout_weight="1"
+                android:layout_height="wrap_content"
+                android:layout_gravity="center_vertical">
+
+                <EditText
+                    android:id="@+id/user_input"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:hint="Type your message here..."
+                    android:background="@drawable/rounded_edges"
+                    android:inputType="textMultiLine"
+                    android:textCursorDrawable="@drawable/no_underline"
+                    android:textColor="@color/button_icon_color"
+                    android:paddingLeft="12dp"
+                    android:paddingRight="12dp"
+                    android:paddingTop="8dp"
+                    android:paddingBottom="8dp"
+                    android:scrollbars="none"
+                    android:maxLines="8"
+                    android:overScrollMode="never"
+                    android:gravity="center_vertical|start"
+                    android:autofillHints="none" />
+
+                <com.google.android.material.button.MaterialButton
+                    android:id="@+id/recordButton"
+                    android:layout_width="40dp"
+                    android:layout_height="40dp"
+                    android:layout_gravity="end|center_vertical"
+                    android:layout_marginRight="8dp"
+                    android:background="@drawable/round_button"
+                    android:backgroundTint="@android:color/transparent"
+                    app:icon="@drawable/record_button"
+                    app:iconGravity="textStart"
+                    app:iconPadding="0dp"
+                    app:iconSize="20dp"
+                    app:iconTint="@color/button_icon_color"
+                    android:contentDescription="@string/record_button" />
+            </FrameLayout>
+
+            <!-- Send Button -->
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/send_button"
+                android:layout_width="40dp"
+                android:layout_height="40dp"
                 android:layout_marginStart="4dp"
                 android:background="@drawable/round_button"
+                android:backgroundTint="@android:color/transparent"
                 app:icon="@drawable/send"
                 app:iconGravity="textStart"
                 app:iconPadding="0dp"
                 app:iconSize="20dp"
-                app:iconTint="@color/button_icon_color" />
+                app:iconTint="@color/button_icon_color"
+                android:contentDescription="@string/send_button" />
         </LinearLayout>
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>

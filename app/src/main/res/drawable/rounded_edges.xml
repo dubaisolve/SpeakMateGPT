@@ -2,14 +2,13 @@
     <item>
         <shape>
             <solid android:color="@color/button_icon_color" />
-            <corners android:radius="100dp" />
+            <corners android:radius="20dp" /> <!-- Adjusted to match button rounding -->
         </shape>
     </item>
-    <item android:left="2dp" android:right="2dp" android:top="2dp" android:bottom="2dp">
+    <item android:left="1dp" android:right="1dp" android:top="1dp" android:bottom="1dp">
         <shape>
             <solid android:color="@color/text_bkgshape_color" />
-            <corners android:radius="100dp" />
+            <corners android:radius="20dp" /> <!-- Adjusted to match button rounding -->
         </shape>
     </item>
 </layer-list>
-
