@@ -13,11 +13,15 @@ import android.content.res.ColorStateList;
 import android.database.Cursor;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
+import android.media.AudioAttributes;
 import android.media.AudioManager;
 import android.media.AudioRecord;
 import android.media.AudioTrack;
 import android.media.MediaPlayer;
 import android.media.MediaRecorder;
+import android.media.audiofx.AcousticEchoCanceler;
+import android.media.audiofx.AutomaticGainControl;
+import android.media.audiofx.NoiseSuppressor;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
@@ -334,13 +338,23 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void initAudioTrack() {
+        AudioAttributes audioAttributes = new AudioAttributes.Builder()
+                .setUsage(AudioAttributes.USAGE_VOICE_COMMUNICATION)
+                .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
+                .build();
+
+        AudioFormat audioFormat = new AudioFormat.Builder()
+                .setSampleRate(sampleRate)
+                .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
+                .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
+                .build();
+
         audioTrack = new AudioTrack(
-                AudioManager.STREAM_MUSIC,
-                sampleRate,
-                channelConfig,
+                audioAttributes,
                 audioFormat,
                 minBufferSize,
-                AudioTrack.MODE_STREAM);
+                AudioTrack.MODE_STREAM,
+                AudioManager.AUDIO_SESSION_ID_GENERATE);
 
         if (audioTrack.getState() != AudioTrack.STATE_UNINITIALIZED) {
             audioTrack.play();
@@ -666,6 +680,13 @@ public class MainActivity extends AppCompatActivity {
                     // Handle if needed
                     break;
 
+                case "conversation.interrupted":
+                    // Stop any audio playback and release AudioTrack
+                    runOnUiThread(() -> {
+                        releaseAudioTrack();
+                    });
+                    break;
+
                 case "response.content_part.done":
                     // Existing code for content_part.done
                     JSONObject part = event.getJSONObject("part");
@@ -777,8 +798,9 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onOpen(WebSocket webSocket, okhttp3.Response response) {
                 Log.d("WebSocket", "Connected");
-                // Send initial response.create event
-                sendInitialResponseCreate();
+                // Send initial session.update event
+                sendSessionUpdate();
+                // No need to send response.create immediately; server_vad will handle it
             }
 
             @Override
@@ -795,9 +817,52 @@ public class MainActivity extends AppCompatActivity {
             @Override
             public void onFailure(WebSocket webSocket, Throwable t, okhttp3.Response response) {
                 Log.e("WebSocket", "Error: " + t.getMessage());
-                runOnUiThread(() -> Toast.makeText(MainActivity.this, "WebSocket Error: " + t.getMessage(), Toast.LENGTH_SHORT).show());
+                handleWebSocketFailure(t, response);
             }
         });
+    }
+    private void handleWebSocketFailure(Throwable t, okhttp3.Response response) {
+        runOnUiThread(() -> {
+            if (response != null && response.code() == 429) {
+                // Rate limit exceeded
+                Toast.makeText(MainActivity.this, "Rate limit exceeded. Please try again later.", Toast.LENGTH_LONG).show();
+            } else {
+                Toast.makeText(MainActivity.this, "WebSocket Error: " + t.getMessage(), Toast.LENGTH_LONG).show();
+            }
+        });
+    }
+    private void sendSessionUpdate() {
+        try {
+            JSONObject sessionConfig = new JSONObject();
+
+            // Configure server-side VAD
+            JSONObject turnDetection = new JSONObject();
+            turnDetection.put("type", "server_vad");
+            sessionConfig.put("turn_detection", turnDetection);
+
+            // Set the transcription model
+            JSONObject inputAudioTranscription = new JSONObject();
+            inputAudioTranscription.put("model", "whisper-1");
+            sessionConfig.put("input_audio_transcription", inputAudioTranscription);
+
+            // Set other session parameters as needed
+            sessionConfig.put("voice", "alloy");
+            sessionConfig.put("input_audio_format", "pcm16");
+            sessionConfig.put("output_audio_format", "pcm16");
+            JSONArray modalities = new JSONArray();
+            modalities.put("text");
+            modalities.put("audio");
+            sessionConfig.put("modalities", modalities);
+
+            // Prepare the session.update event
+            JSONObject event = new JSONObject();
+            event.put("type", "session.update");
+            event.put("session", sessionConfig);
+
+            webSocket.send(event.toString());
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
     }
 
     private void readAudioData() {
@@ -811,7 +876,13 @@ public class MainActivity extends AppCompatActivity {
             while (isOverlayRecording) {
                 int readResult = audioRecord.read(audioBuffer, 0, audioBuffer.length);
                 if (readResult > 0) {
+                    // Optionally, add a short delay here to avoid overwhelming the server
                     sendAudioDataToWebSocket(audioBuffer, readResult);
+                    try {
+                        Thread.sleep(50); // Adjust the delay as needed
+                    } catch (InterruptedException e) {
+                        e.printStackTrace();
+                    }
                 } else {
                     Log.e("MainActivity", "AudioRecord read error: " + readResult);
                 }
@@ -827,8 +898,43 @@ public class MainActivity extends AppCompatActivity {
         int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
 
         bufferSize = AudioRecord.getMinBufferSize(sampleRate, channelConfig, audioFormat);
-        audioRecord = new AudioRecord(MediaRecorder.AudioSource.MIC, sampleRate, channelConfig, audioFormat, bufferSize);
+        audioRecord = new AudioRecord(MediaRecorder.AudioSource.VOICE_COMMUNICATION, sampleRate, channelConfig, audioFormat, bufferSize);
+
+        // Enable Acoustic Echo Canceler
+        int audioSessionId = audioRecord.getAudioSessionId();
+        if (AcousticEchoCanceler.isAvailable()) {
+            AcousticEchoCanceler aec = AcousticEchoCanceler.create(audioSessionId);
+            if (aec != null) {
+                aec.setEnabled(true);
+                Log.d("AudioRecord", "Acoustic Echo Canceler enabled");
+            }
+        } else {
+            Log.d("AudioRecord", "Acoustic Echo Canceler not available");
+        }
+
+        // Enable Noise Suppressor
+        if (NoiseSuppressor.isAvailable()) {
+            NoiseSuppressor ns = NoiseSuppressor.create(audioSessionId);
+            if (ns != null) {
+                ns.setEnabled(true);
+                Log.d("AudioRecord", "Noise Suppressor enabled");
+            }
+        } else {
+            Log.d("AudioRecord", "Noise Suppressor not available");
+        }
+
+        // Enable Automatic Gain Control
+        if (AutomaticGainControl.isAvailable()) {
+            AutomaticGainControl agc = AutomaticGainControl.create(audioSessionId);
+            if (agc != null) {
+                agc.setEnabled(true);
+                Log.d("AudioRecord", "Automatic Gain Control enabled");
+            }
+        } else {
+            Log.d("AudioRecord", "Automatic Gain Control not available");
+        }
     }
+
 
 
     private void startOverlayRecording() {
@@ -848,6 +954,14 @@ public class MainActivity extends AppCompatActivity {
         }
 
         // Proceed with recording
+
+        // Set audio mode to communication to prevent mic from picking up speaker output
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null) {
+            audioManager.setMode(AudioManager.MODE_IN_COMMUNICATION);
+            audioManager.setSpeakerphoneOn(false);
+        }
+
         initAudioRecorder();
         if (audioRecord != null) {
             audioRecord.startRecording();
@@ -862,10 +976,6 @@ public class MainActivity extends AppCompatActivity {
             Log.e("MainActivity", "Failed to initialize AudioRecord");
         }
     }
-
-
-
-
     private void stopOverlayRecording() {
         // Stop recording
         isOverlayRecording = false;
@@ -881,11 +991,15 @@ public class MainActivity extends AppCompatActivity {
             webSocket = null;
         }
 
+        // Reset audio mode
+        AudioManager audioManager = (AudioManager) getSystemService(Context.AUDIO_SERVICE);
+        if (audioManager != null) {
+            audioManager.setMode(AudioManager.MODE_NORMAL);
+            audioManager.setSpeakerphoneOn(true);
+        }
+
         // Keep the overlay visible so the user can start recording again
     }
-
-
-
     private void showOverlay() {
         // Add the overlay to the root layout
         FrameLayout rootLayout = findViewById(android.R.id.content);
@@ -912,7 +1026,6 @@ public class MainActivity extends AppCompatActivity {
         }
         releaseAudioTrack();
     }
-
 
     private void initOverlay() {
         // Inflate the overlay layout
