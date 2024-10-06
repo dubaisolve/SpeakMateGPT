@@ -1,22 +1,34 @@
 package com.dubaisolve.speakmate;
 
+import android.content.Context;
 import android.view.Gravity;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
-import android.widget.LinearLayout;
 import android.widget.RelativeLayout;
 import android.widget.TextView;
-
 import androidx.core.content.ContextCompat;
 import androidx.recyclerview.widget.RecyclerView;
-
 import java.util.List;
 
 public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHolder> {
     private List<Message> messages;
+    private OnItemClickListener onItemClickListener;
+    private Context context;
 
-    // Provide a reference to the views for each data item
+    // Define the interface for item clicks
+    public interface OnItemClickListener {
+        void onItemClick(View view, int position);
+    }
+
+    // Constructor
+    public MessageAdapter(Context context, List<Message> myDataset, OnItemClickListener listener) {
+        this.context = context;
+        this.messages = myDataset;
+        this.onItemClickListener = listener;
+    }
+
+    // ViewHolder class
     public static class ViewHolder extends RecyclerView.ViewHolder {
         public TextView senderTextView;
         public TextView contentTextView;
@@ -28,32 +40,25 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
         }
     }
 
-    // Provide a suitable constructor (depends on the kind of dataset)
-    public MessageAdapter(List<Message> myDataset) {
-        messages = myDataset;
-    }
-
-    // Create new views (invoked by the layout manager)
     @Override
     public MessageAdapter.ViewHolder onCreateViewHolder(ViewGroup parent, int viewType) {
-        // create a new view
+        // Inflate the message item layout
         View v = LayoutInflater.from(parent.getContext())
                 .inflate(R.layout.message_item, parent, false);
         ViewHolder vh = new ViewHolder(v);
         return vh;
     }
 
-    // Replace the contents of a view (invoked by the layout manager)
-    // Replace the contents of a view (invoked by the layout manager)
     @Override
     public void onBindViewHolder(final ViewHolder holder, int position) {
-        // Get element from your dataset at this position
+        // Get the message
         Message message = messages.get(position);
 
-        // Replace the contents of the view with that element
+        // Set sender and content
         holder.senderTextView.setText(message.getSender());
         holder.contentTextView.setText(message.getContent());
 
+        // Adjust layout based on sender
         holder.itemView.post(new Runnable() {
             @Override
             public void run() {
@@ -70,7 +75,7 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
                     holder.contentTextView.setBackgroundResource(R.drawable.rounded_user_message);
                     holder.contentTextView.setTextColor(ContextCompat.getColor(holder.itemView.getContext(), R.color.button_icon_color));
                 } else {
-                    // Align to the left for other messages
+                    // Align to the left for AI messages
                     params.addRule(RelativeLayout.ALIGN_PARENT_LEFT);
                     holder.contentTextView.setGravity(Gravity.START);
                     holder.contentTextView.setBackgroundResource(R.drawable.rounded_other_message);
@@ -79,8 +84,19 @@ public class MessageAdapter extends RecyclerView.Adapter<MessageAdapter.ViewHold
                 holder.contentTextView.setLayoutParams(params);
             }
         });
+
+        // Set click listener on AI messages
+        if ("AI".equals(message.getSender())) {
+            holder.itemView.setOnClickListener(v -> {
+                if (onItemClickListener != null) {
+                    onItemClickListener.onItemClick(v, holder.getAdapterPosition());
+                }
+            });
+        } else {
+            holder.itemView.setOnClickListener(null);
+        }
     }
-    // Return the size of your dataset (invoked by the layout manager)
+
     @Override
     public int getItemCount() {
         return messages.size();

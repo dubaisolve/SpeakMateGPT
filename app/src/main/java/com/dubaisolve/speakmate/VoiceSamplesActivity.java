@@ -12,7 +12,10 @@ public class VoiceSamplesActivity extends AppCompatActivity {
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_voice_samples);
-        List<Voice> voices = getIntent().getParcelableArrayListExtra("voices");
+        List<Voice> voices = null;
+        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.TIRAMISU) {
+            voices = getIntent().getParcelableArrayListExtra("voices", Voice.class);
+        }
         RecyclerView recyclerView = findViewById(R.id.recycler_view);
         VoiceAdapter voiceAdapter = new VoiceAdapter(voices);
         recyclerView.setAdapter(voiceAdapter);

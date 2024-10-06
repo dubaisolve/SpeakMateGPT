@@ -131,12 +131,22 @@
                 android:layout_marginStart="4dp"
                 android:background="@drawable/round_button"
                 android:backgroundTint="@android:color/transparent"
-                app:icon="@drawable/send"
+                app:icon="@drawable/gpt3_button"
                 app:iconGravity="textStart"
                 app:iconPadding="0dp"
                 app:iconSize="20dp"
                 app:iconTint="@color/button_icon_color"
                 android:contentDescription="@string/send_button" />
         </LinearLayout>
+        <ProgressBar
+            android:id="@+id/progress_bar"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:visibility="gone"
+            style="?android:attr/progressBarStyleLarge"
+            app:layout_constraintTop_toTopOf="parent"
+            app:layout_constraintBottom_toBottomOf="parent"
+            app:layout_constraintStart_toStartOf="parent"
+            app:layout_constraintEnd_toEndOf="parent" />
     </androidx.constraintlayout.widget.ConstraintLayout>
 </FrameLayout>
