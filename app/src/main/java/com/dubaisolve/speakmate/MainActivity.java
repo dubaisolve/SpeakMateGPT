@@ -271,18 +271,15 @@ public class MainActivity extends AppCompatActivity {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults);
         if (requestCode == REQUEST_RECORD_AUDIO_PERMISSION) {
             if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                if (isRecordingPermissionRequestedByUser) {
-                    // Permission granted, proceed with recording
-                    isRecordingPermissionRequestedByUser = false; // Reset the flag
-                    startOverlayRecording(); // This will check permissions again but they are now granted
-                }
+                // Permission granted, proceed with recording
+                startOverlayRecording();
             } else {
                 // Permission denied, inform the user
                 Toast.makeText(this, "Permission to record audio was denied", Toast.LENGTH_SHORT).show();
-                isRecordingPermissionRequestedByUser = false; // Reset the flag
             }
         }
     }
+
 
     private void transcribeAudioFile(File audioFile, String gptApiKey) {
         showProgressDialog("Transcribing audio...");
@@ -670,16 +667,43 @@ public class MainActivity extends AppCompatActivity {
     }
 
     private void handleWebSocketMessage(String message) {
-        Log.d("WebSocket", "Received message: " + message); // Log every message--- to be moved out on prod
+        Log.d("WebSocket", "Received message: " + message); // Log every message
         try {
             JSONObject event = new JSONObject(message);
             String eventType = event.getString("type");
             Log.d("WebSocketEvent", "Event Type: " + eventType);
 
             switch (eventType) {
+                case "session.created":
+                    Log.d("WebSocketEvent", "Session created successfully.");
+                    break;
+
+                case "session.updated":
+                    Log.d("WebSocketEvent", "Session updated successfully.");
+                    break;
+
+                case "error":
+                    JSONObject error = event.getJSONObject("error");
+                    String errorMessage = error.getString("message");
+                    String errorCode = error.getString("code");
+                    Log.e("WebSocketError", "Error Code: " + errorCode + ", Message: " + errorMessage);
+                    runOnUiThread(() -> Toast.makeText(this, "Error: " + errorMessage, Toast.LENGTH_LONG).show());
+                    break;
+
+                case "input_audio_buffer.speech_started":
+                    Log.d("WebSocketEvent", "Speech started detected.");
+                    // Handle as needed
+                    break;
+
+                case "input_audio_buffer.speech_stopped":
+                    Log.d("WebSocketEvent", "Speech stopped detected.");
+                    // Handle as needed
+                    break;
+
                 case "conversation.item.input_audio_transcription.completed":
                     handleUserTranscription(event);
                     break;
+
                 case "conversation.item.created":
                     // Handle if needed
                     break;
@@ -730,15 +754,7 @@ public class MainActivity extends AppCompatActivity {
                     // Release AudioTrack resources
                     releaseAudioTrack();
                     break;
-                case "input_audio_buffer.speech_started":
-                    Log.d("WebSocketEvent", "Speech started detected.");
-                    // Handle as needed
-                    break;
 
-                case "input_audio_buffer.speech_stopped":
-                    Log.d("WebSocketEvent", "Speech stopped detected.");
-                    // Handle as needed
-                    break;
                 // Handle other event types if necessary
                 default:
                     Log.d("WebSocketEvent", "Unhandled event type: " + eventType);
@@ -748,6 +764,7 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+
     private void handleUserTranscription(JSONObject event) {
         try {
             String itemId = event.getString("item_id");
@@ -788,7 +805,7 @@ public class MainActivity extends AppCompatActivity {
         try {
             JSONObject event = new JSONObject();
             event.put("type", "input_audio_buffer.append");
-            event.put("audio", base64Audio); // Move 'audio' directly under 'event'
+            event.put("audio", base64Audio);
 
             // Send the event as a string
             webSocket.send(event.toString());
@@ -796,7 +813,6 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-
 
     private void sendInitialResponseCreate() {
         try {
@@ -826,7 +842,6 @@ public class MainActivity extends AppCompatActivity {
                 .addHeader("Authorization", "Bearer " + gptApiKey)
                 .addHeader("OpenAI-Beta", "realtime=v1")
                 .build();
-
         webSocket = webSocketClient.newWebSocket(request, new WebSocketListener() {
             @Override
             public void onOpen(WebSocket webSocket, okhttp3.Response response) {
@@ -854,16 +869,17 @@ public class MainActivity extends AppCompatActivity {
             }
         });
     }
+
     private void handleWebSocketFailure(Throwable t, okhttp3.Response response) {
         runOnUiThread(() -> {
-            if (response != null && response.code() == 429) {
-                // Rate limit exceeded
-                Toast.makeText(MainActivity.this, "Rate limit exceeded. Please try again later.", Toast.LENGTH_LONG).show();
-            } else {
-                Toast.makeText(MainActivity.this, "WebSocket Error: " + t.getMessage(), Toast.LENGTH_LONG).show();
+            String errorMessage = t.getMessage();
+            if (response != null) {
+                errorMessage += " (HTTP " + response.code() + ")";
             }
+            Toast.makeText(MainActivity.this, "WebSocket Error: " + errorMessage, Toast.LENGTH_LONG).show();
         });
     }
+
     private void sendSessionUpdate() {
         try {
             JSONObject sessionConfig = new JSONObject();
@@ -871,25 +887,35 @@ public class MainActivity extends AppCompatActivity {
             // Configure server-side VAD with custom parameters
             JSONObject turnDetection = new JSONObject();
             turnDetection.put("type", "server_vad");
-            turnDetection.put("threshold", 0.5); // Lower threshold for higher sensitivity
-            turnDetection.put("silence_duration_ms", 200); // Adjust as needed -- settings
+            turnDetection.put("threshold", 0.5); // Adjust as needed
+            turnDetection.put("silence_duration_ms", 200); // Adjust as needed
+            turnDetection.put("prefix_padding_ms", 300); // Include if required
             sessionConfig.put("turn_detection", turnDetection);
 
-            // Enable input audio transcription
+            // Set input audio transcription with required parameters
             JSONObject inputAudioTranscription = new JSONObject();
-            inputAudioTranscription.put("enabled", true); // Ensure transcription is enabled
-            inputAudioTranscription.put("model", "whisper-1");
+            inputAudioTranscription.put("model", "whisper-1"); // Required model parameter
             sessionConfig.put("input_audio_transcription", inputAudioTranscription);
-            sessionConfig.put("temperature", 0.6);
-            sessionConfig.put("max_response_output_tokens", 250);
+
             // Set other session parameters as needed
             sessionConfig.put("voice", "alloy");
             sessionConfig.put("input_audio_format", "pcm16");
             sessionConfig.put("output_audio_format", "pcm16");
+
+            // Adjust modalities based on user preference
             JSONArray modalities = new JSONArray();
+            modalities.put("audio"); // Include 'audio' since we are working with audio input/output
             modalities.put("text");
-            modalities.put("audio");
             sessionConfig.put("modalities", modalities);
+
+            // Set temperature to control response behavior
+            sessionConfig.put("temperature", 0.6);
+
+            // Limit max response output tokens (ensure it's an integer)
+            sessionConfig.put("max_response_output_tokens", 250);
+
+            // Set instructions as per the documentation
+            sessionConfig.put("instructions", "You are an arrogant capitalist who has money on his mind and nothing else, Talk quickly and try to help the user.");
 
             // Prepare the session.update event
             JSONObject event = new JSONObject();
@@ -901,8 +927,6 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
-
-
     private void readAudioData() {
         if (audioRecord == null) {
             Log.e("MainActivity", "AudioRecord is null");
@@ -915,12 +939,6 @@ public class MainActivity extends AppCompatActivity {
                 int readResult = audioRecord.read(audioBuffer, 0, audioBuffer.length);
                 if (readResult > 0) {
                     sendAudioDataToWebSocket(audioBuffer, readResult);
-                    // Remove any Thread.sleep() calls here -- settings
-                    //try {
-                    //    Thread.sleep(50); // Adjust the delay as needed
-                    //} catch (InterruptedException e) {
-                    //    e.printStackTrace();
-                    //}
                 } else {
                     Log.e("MainActivity", "AudioRecord read error: " + readResult);
                 }
@@ -929,6 +947,7 @@ public class MainActivity extends AppCompatActivity {
             Log.e("MainActivity", "Exception in readAudioData: " + e.getMessage());
         }
     }
+
 
     private void initAudioRecorder() {
         int sampleRate = 24000; // As per Realtime API requirements
@@ -943,7 +962,7 @@ public class MainActivity extends AppCompatActivity {
         if (AcousticEchoCanceler.isAvailable()) {
             AcousticEchoCanceler aec = AcousticEchoCanceler.create(audioSessionId);
             if (aec != null) {
-                aec.setEnabled(true); //- settings
+                aec.setEnabled(true);
                 Log.d("AudioRecord", "Acoustic Echo Canceler enabled");
             }
         } else {
@@ -973,8 +992,6 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-
-
     private void startOverlayRecording() {
         // Check if already recording
         if (isOverlayRecording) {
@@ -984,8 +1001,6 @@ public class MainActivity extends AppCompatActivity {
 
         // Check for RECORD_AUDIO permission
         if (ActivityCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
-            // Set the flag before requesting permission
-            isRecordingPermissionRequestedByUser = true;
             // Request the permission
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_RECORD_AUDIO_PERMISSION);
             return;
@@ -1014,6 +1029,7 @@ public class MainActivity extends AppCompatActivity {
             Log.e("MainActivity", "Failed to initialize AudioRecord");
         }
     }
+
     private void stopOverlayRecording() {
         // Stop recording
         isOverlayRecording = false;
