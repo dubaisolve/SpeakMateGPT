@@ -18,4 +18,9 @@ public class Message {
     public String getContent() {
         return content;
     }
+
+    // Setter method for content
+    public void setContent(String content) {
+        this.content = content;
+    }
 }

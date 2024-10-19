@@ -7,6 +7,7 @@
     android:layout_gravity="top"
     android:layout_weight="0.25"
     android:background="#80000000">
+
     <LinearLayout
         android:id="@+id/overlay_buttons_layout"
         android:layout_width="wrap_content"
@@ -14,6 +15,8 @@
         android:orientation="horizontal"
         android:padding="16dp"
         android:layout_gravity="center">
+
+        <!-- Existing Buttons -->
         <com.google.android.material.button.MaterialButton
             android:id="@+id/record_button_overlay"
             android:layout_width="wrap_content"
@@ -38,6 +41,7 @@
             app:iconPadding="8dp"
             android:layout_marginStart="16dp"
             android:visibility="visible" />
+
         <com.google.android.material.button.MaterialButton
             android:id="@+id/close_button_overlay"
             android:layout_width="wrap_content"
@@ -50,19 +54,32 @@
             app:iconPadding="8dp"
             android:layout_marginStart="16dp"
             android:visibility="visible" />
-
     </LinearLayout>
+
+    <!-- Toggle Buttons Layout -->
     <LinearLayout
+        android:id="@+id/toggle_buttons_layout"
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:gravity="end"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:padding="16dp"
+        android:layout_gravity="bottom">
 
+        <!-- Existing Audio Toggle Switch -->
         <Switch
             android:id="@+id/audio_toggle_switch"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:text="Audio Output" />
+
+        <!-- New Text Only Toggle Switch -->
+        <Switch
+            android:id="@+id/text_only_toggle_switch"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:text="Text Only"
+            android:layout_marginStart="16dp" />
     </LinearLayout>
 
 </FrameLayout>
