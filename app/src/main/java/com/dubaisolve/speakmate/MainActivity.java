@@ -81,6 +81,7 @@ import okhttp3.RequestBody;
 import okhttp3.ResponseBody;
 import okhttp3.WebSocket;
 import okhttp3.logging.HttpLoggingInterceptor;
+import okio.ByteString;
 import retrofit2.Call;
 import retrofit2.Callback;
 import retrofit2.HttpException;
@@ -152,12 +153,19 @@ public class MainActivity extends AppCompatActivity {
     private MaterialButton closeButtonOverlay;
     private Switch audioToggleSwitch;
     private Switch textOnlyToggleSwitch;
+
+    private Switch e11ToggleSwitch;
     private boolean isAudioOutputEnabled = false; // Default is off
     private boolean isTextOnlyEnabled = false; // Default is off
 
     // For WebSocket
     private OkHttpClient webSocketClient;
     private WebSocket webSocket;
+
+    private OkHttpClient elevenLabsClient;
+    private WebSocket elevenLabsWebSocket;
+    private String elevenLabsVoiceId; // The voice ID to use
+
 
     // For Audio Recording
     private AudioRecord audioRecord;
@@ -171,6 +179,7 @@ public class MainActivity extends AppCompatActivity {
     private final int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
     private int minBufferSize;
     private boolean isAudioTrackInitialized = false;
+    private boolean isE11Enabled = false;
 
     @Override
     protected void onResume() {
@@ -676,7 +685,7 @@ public class MainActivity extends AppCompatActivity {
     private StringBuilder assistantTranscriptBuilder = new StringBuilder();
 
     private void handleAssistantAudioTranscriptDelta(JSONObject event) {
-        try {
+   /*     try {
             String delta = event.getString("delta");
             assistantTranscriptBuilder.append(delta);
 
@@ -696,7 +705,7 @@ public class MainActivity extends AppCompatActivity {
             });
         } catch (JSONException e) {
             e.printStackTrace();
-        }
+        }*/
     }
 
     private void handleAssistantAudioTranscriptDone(JSONObject event) {
@@ -704,15 +713,12 @@ public class MainActivity extends AppCompatActivity {
             String transcript = event.getString("transcript");
 
             runOnUiThread(() -> {
-                if (!myDataset.isEmpty() && myDataset.get(myDataset.size() - 1).getSender().equals("AI")) {
-                    myDataset.get(myDataset.size() - 1).setContent(transcript);
-                    mAdapter.notifyItemChanged(myDataset.size() - 1);
-                } else {
-                    Message aiMessage = new Message("AI", transcript);
-                    myDataset.add(aiMessage);
-                    mAdapter.notifyItemInserted(myDataset.size() - 1);
-                    recyclerView.scrollToPosition(myDataset.size() - 1);
-                }
+                // Create a new message with sender "AI"
+                Message aiMessage = new Message("AI", transcript);
+                myDataset.add(aiMessage);
+                mAdapter.notifyItemInserted(myDataset.size() - 1);
+                recyclerView.scrollToPosition(myDataset.size() - 1);
+
                 // Clear the transcript builder
                 assistantTranscriptBuilder.setLength(0);
             });
@@ -721,7 +727,64 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
+    private StringBuilder assistantTextBuilder = new StringBuilder();
 
+    private void handleAssistantTextDelta(JSONObject event) {
+//        try {
+//            String delta = event.getString("delta");
+//            assistantTextBuilder.append(delta);
+//
+//            // Update the UI with the current assistant response
+//            runOnUiThread(() -> {
+//                if (!myDataset.isEmpty() && myDataset.get(myDataset.size() - 1).getSender().equals("AI")) {
+//                    myDataset.get(myDataset.size() - 1).setContent(assistantTextBuilder.toString());
+//                    mAdapter.notifyItemChanged(myDataset.size() - 1);
+//                } else {
+//                    // Add a new message
+//                    Message aiMessage = new Message("AI", assistantTextBuilder.toString());
+//                    myDataset.add(aiMessage);
+//                    mAdapter.notifyItemInserted(myDataset.size() - 1);
+//                    recyclerView.scrollToPosition(myDataset.size() - 1);
+//                }
+//            });
+//
+//            // Do not send deltas to ElevenLabs
+//        } catch (JSONException e) {
+//            e.printStackTrace();
+//        }
+    }
+
+    private void handleAssistantTextDone(JSONObject event) {
+        try {
+            String text = event.getString("text");
+            Log.d("OpenAI", "Assistant final text: " + text);
+
+            runOnUiThread(() -> {
+                try {
+                    // Create a new message with sender "AI"
+                    Message aiMessage = new Message("AI", text);
+                    myDataset.add(aiMessage);
+                    mAdapter.notifyItemInserted(myDataset.size() - 1);
+                    recyclerView.scrollToPosition(myDataset.size() - 1);
+
+                    // Send the final text to ElevenLabs if E11 is enabled
+                    if (isE11Enabled) {
+                        Log.d("ElevenLabs", "Sending assistant's final text to ElevenLabs.");
+                        sendTextToElevenLabs(text);
+                    }
+
+                    // Clear the transcript builder
+                    assistantTextBuilder.setLength(0);
+                } catch (Exception e) {
+                    Log.e("handleAssistantTextDone", "Error in UI thread: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            });
+        } catch (JSONException e) {
+            Log.e("handleAssistantTextDone", "JSON parsing error: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
 
     private void handleWebSocketMessage(String message) {
         Log.d("WebSocket", "Received message: " + message);
@@ -807,6 +870,13 @@ public class MainActivity extends AppCompatActivity {
                 case "response.audio.done":
                     releaseAudioTrack();
                     break;
+                case "response.text.delta":
+                    handleAssistantTextDelta(event);
+                    break;
+
+                case "response.text.done":
+                    handleAssistantTextDone(event);
+                    break;
 
                 default:
                     Log.d("WebSocketEvent", "Unhandled event type: " + eventType);
@@ -860,6 +930,117 @@ public class MainActivity extends AppCompatActivity {
             e.printStackTrace();
         }
     }
+    private void sendElevenLabsInitialMessage() {
+        JSONObject message = new JSONObject();
+        try {
+            message.put("text", " "); // Initial text should be a space
+            message.put("voice_settings", new JSONObject()
+                    .put("stability", 0.5)
+                    .put("similarity_boost", 0.8));
+            elevenLabsWebSocket.send(message.toString());
+            Log.d("ElevenLabs", "Sent initial message to ElevenLabs.");
+        } catch (JSONException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void handleReceivedAudioData(byte[] audioData) {
+        try {
+            // Save the audio data to a temporary file
+            File tempAudioFile = new File(getCacheDir(), "elevenlabs_audio.mp3");
+            FileOutputStream fos = new FileOutputStream(tempAudioFile);
+            fos.write(audioData);
+            fos.close();
+
+            // Play the audio using MediaPlayer
+            MediaPlayer mediaPlayer = new MediaPlayer();
+            mediaPlayer.setDataSource(tempAudioFile.getAbsolutePath());
+            mediaPlayer.setOnPreparedListener(mp -> mediaPlayer.start());
+            mediaPlayer.setOnCompletionListener(mp -> {
+                mediaPlayer.release();
+                tempAudioFile.delete(); // Delete the temp file after playback
+            });
+            mediaPlayer.prepareAsync();
+
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
+    }
+
+    private void playReceivedAudio(byte[] audioData) {
+        if (audioTrack == null) {
+            int sampleRate = 44100; // Ensure this matches ElevenLabs output format
+            int channelConfig = AudioFormat.CHANNEL_OUT_MONO;
+            int audioFormat = AudioFormat.ENCODING_PCM_16BIT;
+            int bufferSize = AudioTrack.getMinBufferSize(sampleRate, channelConfig, audioFormat);
+            audioTrack = new AudioTrack(AudioManager.STREAM_MUSIC, sampleRate, channelConfig,
+                    audioFormat, bufferSize, AudioTrack.MODE_STREAM);
+            audioTrack.play();
+        }
+        audioTrack.write(audioData, 0, audioData.length);
+    }
+
+    private void sendEndOfSequenceToElevenLabs() {
+        if (elevenLabsWebSocket != null) {
+            JSONObject message = new JSONObject();
+            try {
+                message.put("text", ""); // Empty string to signal the end
+
+                elevenLabsWebSocket.send(message.toString());
+                Log.d("ElevenLabs", "Sent end of sequence message.");
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        }
+    }
+
+
+
+    private AudioTrack elevenLabsAudioTrack;
+
+    private void writeElevenLabsAudioData(byte[] audioData) {
+        Log.d("AudioPlayback", "Writing audio data of length: " + audioData.length);
+        if (elevenLabsAudioTrack == null) {
+            initElevenLabsAudioTrack();
+        }
+
+        elevenLabsAudioTrack.write(audioData, 0, audioData.length);
+    }
+
+    private void initElevenLabsAudioTrack() {
+        int sampleRate = 22050; // As per ElevenLabs audio format
+        int minBufferSize = AudioTrack.getMinBufferSize(sampleRate, AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT);
+
+        elevenLabsAudioTrack = new AudioTrack(
+                AudioManager.STREAM_MUSIC,
+                sampleRate,
+                AudioFormat.CHANNEL_OUT_MONO,
+                AudioFormat.ENCODING_PCM_16BIT,
+                minBufferSize,
+                AudioTrack.MODE_STREAM);
+
+        if (elevenLabsAudioTrack.getState() != AudioTrack.STATE_UNINITIALIZED) {
+            elevenLabsAudioTrack.play();
+        } else {
+            Log.e("AudioTrack", "Failed to initialize ElevenLabs AudioTrack");
+        }
+    }
+
+    private void releaseElevenLabsAudioTrack() {
+        if (elevenLabsAudioTrack != null) {
+            elevenLabsAudioTrack.stop();
+            elevenLabsAudioTrack.release();
+            elevenLabsAudioTrack = null;
+        }
+    }
+    private void closeElevenLabsWebSocket() {
+        if (elevenLabsWebSocket != null) {
+            elevenLabsWebSocket.close(1000, null);
+            elevenLabsWebSocket = null;
+        }
+        releaseElevenLabsAudioTrack();
+    }
 
     private void initWebSocket() {
         webSocketClient = new OkHttpClient();
@@ -873,7 +1054,7 @@ public class MainActivity extends AppCompatActivity {
         webSocket = webSocketClient.newWebSocket(request, new WebSocketListener() {
             @Override
             public void onOpen(WebSocket webSocket, okhttp3.Response response) {
-                Log.d("WebSocket", "Connected");
+                Log.d("OpenAIWebSocket", "Connected");
                 // Send initial session.update event
                 sendSessionUpdate();
                 // No need to send response.create immediately; server_vad will handle it
@@ -881,18 +1062,18 @@ public class MainActivity extends AppCompatActivity {
 
             @Override
             public void onMessage(WebSocket webSocket, String text) {
-                Log.d("WebSocket", "Received: " + text);
+                Log.d("OpenAIWebSocket", "Received text message: " + text);
                 handleWebSocketMessage(text);
             }
 
             @Override
             public void onClosing(WebSocket webSocket, int code, String reason) {
-                Log.d("WebSocket", "Closing: " + code + " / " + reason);
+                Log.d("OpenAIWebSocket", "Closing: " + code + " / " + reason);
             }
 
             @Override
             public void onFailure(WebSocket webSocket, Throwable t, okhttp3.Response response) {
-                Log.e("WebSocket", "Error: " + t.getMessage());
+                Log.e("OpenAIWebSocket", "Error: " + t.getMessage());
                 handleWebSocketFailure(t, response);
             }
         });
@@ -1038,20 +1219,113 @@ public class MainActivity extends AppCompatActivity {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.RECORD_AUDIO}, REQUEST_RECORD_AUDIO_PERMISSION);
         }
     }
+
+    private void sendTextToElevenLabs(String text) {
+        if (elevenLabsWebSocket != null) {
+            JSONObject message = new JSONObject();
+            try {
+                message.put("text", text);
+                message.put("flush", true); // Force audio generation
+                elevenLabsWebSocket.send(message.toString());
+                Log.d("ElevenLabs", "Sent text message to ElevenLabs: " + text);
+            } catch (JSONException e) {
+                e.printStackTrace();
+            }
+        } else {
+            Log.e("ElevenLabs", "WebSocket is null. Cannot send text.");
+        }
+    }
+
+    private void initElevenLabsWebSocket() {
+        elevenLabsClient = new OkHttpClient.Builder()
+                .connectTimeout(10, TimeUnit.SECONDS)
+                .writeTimeout(10, TimeUnit.SECONDS)
+                .readTimeout(0, TimeUnit.MINUTES) // No read timeout
+                .build();
+
+        String url = "wss://api.elevenlabs.io/v1/text-to-speech/" + voiceId +
+                "/stream-input?model_id=eleven_monolingual_v1&inactivity_timeout=180";
+
+        Request request = new Request.Builder()
+                .url(url)
+                .addHeader("xi-api-key", elevenLabsApiKey)
+                .build();
+
+        elevenLabsWebSocket = elevenLabsClient.newWebSocket(request, new WebSocketListener() {
+            @Override
+            public void onOpen(WebSocket webSocket, okhttp3.Response response) {
+                Log.d("ElevenLabsWebSocket", "Connected to ElevenLabs");
+                // Send the initial configuration message
+                sendElevenLabsInitialMessage();
+
+                // For testing, send a test message
+                sendTextToElevenLabs("Hello, this is a test message.");
+                // Do not send EOS immediately
+                // sendEndOfSequenceToElevenLabs();
+            }
+
+            @Override
+            public void onMessage(WebSocket webSocket, String text) {
+                Log.d("ElevenLabsWebSocket", "Received text message from ElevenLabs: " + text);
+                try {
+                    JSONObject response = new JSONObject(text);
+                    if (response.has("audio")) {
+                        String audioBase64 = response.getString("audio");
+                        if (!audioBase64.equals("null")) {
+                            byte[] audioData = Base64.decode(audioBase64, Base64.DEFAULT);
+                            handleReceivedAudioData(audioData);
+                        } else {
+                            Log.d("ElevenLabs", "No audio data received.");
+                        }
+                    } else {
+                        Log.d("ElevenLabs", "Received message without audio data.");
+                    }
+                } catch (JSONException e) {
+                    e.printStackTrace();
+                }
+            }
+            @Override
+            public void onMessage(WebSocket webSocket, ByteString bytes) {
+                Log.d("ElevenLabsWebSocket", "Received binary message from ElevenLabs");
+                byte[] audioData = bytes.toByteArray();
+                handleReceivedAudioData(audioData);
+            }
+
+            @Override
+            public void onClosing(WebSocket webSocket, int code, String reason) {
+                Log.d("ElevenLabsWebSocket", "Closing: " + code + " / " + reason);
+            }
+
+            @Override
+            public void onClosed(WebSocket webSocket, int code, String reason) {
+                Log.d("ElevenLabsWebSocket", "Closed: " + code + " / " + reason);
+            }
+
+            @Override
+            public void onFailure(WebSocket webSocket, Throwable t, okhttp3.Response response) {
+                Log.e("ElevenLabsWebSocket", "Error: " + t.getMessage());
+            }
+        });
+    }
+
     private void startOverlayRecordingInternal() {
         initAudioRecorder();
         if (audioRecord != null) {
             audioRecord.startRecording();
             isOverlayRecording = true;
 
-            // Start WebSocket connection
+            // Start OpenAI WebSocket connection
             initWebSocket();
+
+            // Start ElevenLabs WebSocket if E11 is enabled
+            if (isE11Enabled) {
+                initElevenLabsWebSocket();
+            }
 
             // Start reading audio data in a separate thread
             new Thread(() -> readAudioData()).start();
 
             // Send initial session update after WebSocket is connected
-            // Delay slightly to ensure WebSocket is ready
             new Handler(Looper.getMainLooper()).postDelayed(() -> {
                 if (webSocket != null) {
                     sendSessionUpdate();
@@ -1071,10 +1345,15 @@ public class MainActivity extends AppCompatActivity {
             audioRecord = null;
         }
 
-        // Close WebSocket connection
+        // Close OpenAI WebSocket connection
         if (webSocket != null) {
             webSocket.close(1000, null);
             webSocket = null;
+        }
+
+        // Close ElevenLabs WebSocket if open
+        if (isE11Enabled && elevenLabsWebSocket != null) {
+            closeElevenLabsWebSocket();
         }
 
         // Reset audio mode
@@ -1130,19 +1409,52 @@ public class MainActivity extends AppCompatActivity {
         // Initialize toggles
         audioToggleSwitch = overlayView.findViewById(R.id.audio_toggle_switch);
         textOnlyToggleSwitch = overlayView.findViewById(R.id.text_only_toggle_switch);
+        e11ToggleSwitch = overlayView.findViewById(R.id.e11_toggle_switch);
+
 
         if (audioToggleSwitch != null && textOnlyToggleSwitch != null) {
             // Initialize isAudioOutputEnabled and isTextOnlyEnabled based on toggle states
             isAudioOutputEnabled = audioToggleSwitch.isChecked();
             isTextOnlyEnabled = textOnlyToggleSwitch.isChecked();
 
+            e11ToggleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
+                isE11Enabled = isChecked;
+
+                if (isChecked) {
+                    // Ensure that Text Only is enabled and Audio Output is disabled
+                    if (!isTextOnlyEnabled) {
+                        textOnlyToggleSwitch.setChecked(true);
+                    }
+                    if (isAudioOutputEnabled) {
+                        audioToggleSwitch.setChecked(false);
+                    }
+                    audioToggleSwitch.setEnabled(false);
+                } else {
+                    // Re-enable the Audio Output toggle
+                    audioToggleSwitch.setEnabled(true);
+                }
+            });
+
             // Set up listener for audioToggleSwitch
             audioToggleSwitch.setOnCheckedChangeListener((buttonView, isChecked) -> {
                 isAudioOutputEnabled = isChecked;
-                if (!isChecked) {
-                    // Stop audio playback if audio is being played
-                    releaseAudioTrack();
+
+                if (isChecked) {
+                    // Ensure Text Only and E11 are disabled when Audio Output is enabled
+                    if (isTextOnlyEnabled) {
+                        textOnlyToggleSwitch.setChecked(false);
+                    }
+                    if (isE11Enabled) {
+                        e11ToggleSwitch.setChecked(false);
+                    }
+                    textOnlyToggleSwitch.setEnabled(false);
+                    e11ToggleSwitch.setEnabled(false);
+                } else {
+                    // Re-enable Text Only and E11 toggles
+                    textOnlyToggleSwitch.setEnabled(true);
+                    e11ToggleSwitch.setEnabled(true);
                 }
+
                 // Send session update to adjust modalities
                 if (webSocket != null) {
                     sendSessionUpdate();
@@ -1165,6 +1477,11 @@ public class MainActivity extends AppCompatActivity {
                 } else {
                     // Enable audioToggleSwitch when Text Only is disabled
                     audioToggleSwitch.setEnabled(true);
+                    // Disable E11 toggle when Text Only is disabled
+                    if (isE11Enabled) {
+                        e11ToggleSwitch.setChecked(false);
+                    }
+                    e11ToggleSwitch.setEnabled(false);
                 }
 
                 // Send session update to adjust modalities
